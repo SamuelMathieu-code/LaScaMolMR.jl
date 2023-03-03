@@ -25,7 +25,7 @@ end
 function _make_regex(x::Vector{Any})::Regex
     str = "";
     for i in x
-        if (i isa AbstractString); str*=i; else; str*="(.)"; end;     # pourra etre augmenté pour prendre en compte les types d'infos et les conditions a respecter.
+        if (i isa String); str*=i; else; str*="(.)"; end;     # pourra etre augmenté pour prendre en compte les types d'infos et les conditions a respecter.
     end
     return Regex(str)
 end
