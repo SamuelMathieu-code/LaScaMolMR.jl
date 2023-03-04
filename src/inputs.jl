@@ -52,7 +52,7 @@ function make_regex_path(path1::String, path2::Vector{Any})::Regex
     for i in path2
         if (i isa String); str*=i; else; str*="(.)"; end;     # pourra etre augmenté pour prendre en compte les types d'infos et les conditions a respecter.
     end
-    str = joinpath(path1, str)
+    str = joinpath(path1, str);
     return Regex(str)
 end
 
@@ -102,5 +102,20 @@ QtlStudy(path1::String,
          chr::Vector{String},
          columns::Vector{ValTypeGen.GenVarInfo}, 
          separator::Union{String, Char}) =  QtlStudy(find_all_corresp(path1, path2, genes, chr), columns, separator)
+
+# Iteration overload
+function Base.iterate(iter::QtlStudy)
+    element = GWAS(iter.paths[1], iter.columns, iter.separator);
+    return (element, 1)
+end
+
+function Base.iterate(iter::QtlStudy, state)
+    count = state+1;
+    if count>length(iter.paths)
+        return nothing
+    end
+    element = GWAS(iter.paths[count], iter.columns, iter.separator);
+    return (element, count)
+end
 
 end #Inputs
