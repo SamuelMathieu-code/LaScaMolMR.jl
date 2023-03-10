@@ -1,13 +1,18 @@
 
+PLINK = get(ENV, "PLINK_PATH", Sys.BINDIR) # Get PLINK_PATH as enc variable default being the environement's bin directory.
+
 ##################################################
 #                    ivSelect                    #
 ##################################################
 
 """
 Find potential ivs from exposure with cis method
+Returns tuple made of array of ivs (chr, pos) and an array of data (Beta, se, pval)
 """
-function get_exp_ivs_cis(exposure::GWAS)::Tuple{Array{Int64, 2}, Array{Float64, 2}}
+function get_exp_ivs_cis(exposure::GWAS)::Tuple{Array{Int64, 2}, Array{Float64, 2}}  # NOTE : Faire un accesseur pour avoir le (beta, se, pval) rapidement :
+                                                                                     #        nouvel argument du struct GWAS et QtlStudy?
     #...
+    return [], []
 end
 
 """
@@ -15,6 +20,7 @@ Find potential ivs from exposure with trans method
 """
 function get_exp_ivs_trans(exposure::GWAS)::Tuple{Array{Int64, 2}, Array{Float64, 2}}
     #...
+    return [], []
 end
 
 """
@@ -22,6 +28,7 @@ merge exp iv list with snps available in target + clumping of ivs if corr_tresho
 """
 function get_corresp_ivs(target::GWAS, pot_ivs::Array{Int64, 2},  corr_threshold::Union{nothing, Float16} = 0.1)::Tuple{Vector{Int64}, Array{Float64, 2}}
     #...
+    return [], []
 end
 
 
