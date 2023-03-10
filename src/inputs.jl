@@ -54,6 +54,7 @@ function make_func(path::String,
                    trait_iso::Union{nothing, String}=nothing)::Function
     
     # return a function that threats a line (String) and returns a tuple of vectors : ([chr, pos], [beta, se, pval]) --> raise err if not enough info in columns
+    # Traiter cas par cas pour ne pas avoir à le faire à chaque MR. Faire une version pour QtlStudy pour accélérer?
     # cas qui foirent -> 
     #                   si un de chr, trait_iso, trait_name != nothing et pas dans columns -> foire.
     #                   si ni (β, SE) ou (OR, CI) dans columns -> foire
