@@ -35,7 +35,7 @@ struct GWAS
     columns::Vector{GenVarInfo}
     separator::Union{String, Char}
     trait_name::Union{nothing, String}
-    chr::Union{nothing, Int, String} # Int or string?
+    chr::Union{nothing, Int} # Int or string?
     trait_iso::Union{nothing, String}
 end
 
