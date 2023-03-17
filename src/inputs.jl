@@ -1,23 +1,30 @@
 
 ##################################################
+#                     Utils                      #
+##################################################
+
+inv_logit(x) = exp(x)/(1+exp(x));
+
+##################################################
 #                   GenVarInfo                   #
 ##################################################
 
 
 @enum GenVarInfo begin
     TRAIT_NAME
-    TRAIT_NAME_ISO
-    TRAIT_ISO
+    # TRAIT_NAME_ISO
+    # TRAIT_ISO       # à voir .....
     CHR
     POS
     RSID
     CHR_POS
-    CHR_COLONG_POS
+    CHR_COLON_POS
     BETA
     SE
     MAF
     ODD_RATIO
-    CI
+    CI_LOW
+    CI_HIGH
     PVAL
     # add others ?
     OTHER_INFO
@@ -34,85 +41,83 @@ promote_rule(::Type{S}, ::Type{T}) where {S <: QtlPathPattern, T <: QtlPathPatte
 
 struct GWAS
     path::String
-    columns::Vector{GenVarInfo}
+    columns::Dict{GenVarInfo, Int64}
     separator::Union{String, Char}
-    trait_name::Union{nothing, String}
-    chr::Union{nothing, Int8} # Int or string?
-    trait_iso::Union{nothing, String}
-    acc_func::Function # -----------------------> acces infos from line of file
+    trait_name::Union{Nothing, String}  # When searching pot ivs --> check trait_name id ok with ouput of GWAS.acc_func <=> GWAS.trait_name !== nothing
+    chr::Union{Nothing, String}
+    acc_func::Function
 end
 
 
 """
-Return function that extracts ([chr, pos], [beta, se, pval])
+Return function that extracts (trait_name, [chr, pos], [beta, se, pval]) from line of file (string)  #### NOTE : CHANGE COLUMNS from VECTOR to DICT(GenVarInfo -> Int)
+    Raises ErrorException if some information is missiong in `columns` argument.
 """
-function make_func(path::String, 
-                   columns::Vector{GenVarInfo}, 
-                   sep::Union{String, Char}, 
-                   trait_name::Union{String, nothing} = nothing, 
-                   chr::Union{Int8, nothing}=nothing, 
-                   trait_iso::Union{nothing, String}=nothing)::Function
+function make_func(columns::Dict{GenVarInfo, Int64}, 
+                   sep::Union{String, Char})::Function
     
-    # return a function that threats a line (String) and returns a tuple of vectors : ([chr, pos], [beta, se, pval]) --> raise err if not enough info in columns
-    # Traiter cas par cas pour ne pas avoir à le faire à chaque MR. Faire une version pour QtlStudy pour accélérer?
-    # cas qui foirent -> 
-    #                   si un de chr, trait_iso, trait_name != nothing et pas dans columns -> foire.
-    #                   si ni (β, SE) ou (OR, CI) dans columns -> foire
-    #                   si ni (CHR, POS), CHR_POS, CHR_COLONG_POS dans columns -> foire 
-    
-    if chr!==nothing && !(CHR in columns) && !(CHR_COLONG_POS in columns) && !(CHR_POS in columns); throw(ErrorException("no argument chr in columns of GWAS")); end
-    if trait_name!==nothing && !(TRAIT_NAME in columns) && !(TRAIT_NAME_ISO in columns); throw(ErrorException("no argument TRAIT_NAME in columns of GWAS")); end
-    if trait_iso!==nothing && !(TRAIT_ISO in columns) && !(TRAIT_NAME_ISO in columns); throw(ErrorException("no argument trait_iso in columns of GWAS")); end
-    if !(CHR_COLONG_POS in cloumns) || !(CHR_POS in columns) || !((CHR in columns) && (POS in columns)); throw(ErrorException("Not enough information about variants in columns")); end
-    if !(PVAL in columns); throw(ErrorException("No pvalue info in columns")); end
-    
-    if BETA in columns && SE in columns
-        
-        #...
-    elseif OR in columns && CI in columns
-        
-        #...
+    if !(haskey(columns, PVAL)); throw(ErrorException("No pvalue info in columns")); end
+    # treat cases of effect info
+    if haskey(columns, BETA) && haskey(columns, SE)
+        get_effect = line -> [line[columns[BETA]], line[columns[SE]], line[columns[PVAL]]]
+    elseif haskey(columns, OR) && haskey(columns, CI_LOW) && haskey(columns, CI_HIGH)
+        get_effect = line -> [inv_logit(line[columns[ODD_RATIO]]), (inv_logit(line[columns[CI_HIGH]])-inv_logit(line[columns[CI_LOW]]))/3.91992]    #### Can I optimize this better??
     else
         throw(ErrorException("Not either (BETA, SE) or (OR, CI) in columns"))
     end
 
-    return (line::String -> ([0, 0], [0, 0, 0]))
+    # Treat cases of variant info formating
+    if haskey(columns, CHR) && haskey(columns, POS)
+        get_var = line -> [line[columns[CHR]], line[columns[POS]]]
+    elseif haskey(columns, CHR_COLON_POS)
+        get_var = line -> split(line[columns[CHR_COLON_POS]], ':')
+    elseif haskey(columns, CHR_POS)
+        get_var = line -> split(line[columns[CHR_POS]], '_')
+    else
+        throw(ErrorException("Missing CHR and POS information"))
+    end
+
+    if haskey(columns, TRAIT_NAME)                                       #### See how we can treat the case where trait_name is composed of base + iso in different columns
+        get_trait = line -> line[columns[TRAIT_NAME]]
+    else
+        get_trait = line -> nothing
+    end
+
+    function f(sline::String)
+        line = split(sline, sep)
+        return get_trait(line), get_var(line), get_effect(line)
+    end
+
+    return f
 end
 
 
 GWAS(path::String,
-     columns::Vector{GenVarInfo},
-     separator::Union{String, Char}) = GWAS(path, columns, separator, nothing, nothing, nothing, make_func(path, columns, separator))
+     columns::Dict{GenVarInfo, Int64},
+     separator::Union{String, Char}) = GWAS(path, columns, separator, nothing, nothing, make_func(columns, separator))
 
 GWAS(path::String,
-     columns::Vector{GenVarInfo},
+     columns::Dict{GenVarInfo, Int64},
      separator::Union{Char, String},
-     trait_name::String) = GWAS(path, columns, separator, trait_name, nothing, nothing, make_func(path, columns, separator, trait_name))
+     trait_name::String) = GWAS(path, columns, separator, trait_name, nothing, make_func(columns, separator))
 
 GWAS(path::String,
-     columns::Vector{GenVarInfo},
+     columns::Dict{GenVarInfo, Int64},
      separator::Union{String, Char},
      trait_name::String,
-     trait_iso::String) = GWAS(path, columns, separator, trait_name, nothing, trait_iso, make_func(path, columns, trait_name, nothing, trait_iso))
+     chr::Int) = GWAS(path, columns, separator, trait_name, chr, make_func(columns, separator))
 
 GWAS(path::String,
-     columns::Vector{String},
+     columns::Dict{GenVarInfo, Int64},
      separator::Union{String, Char},
-     trait_name::String,
-     chr::Int) = GWAS(path, columns, separator, trait_name, chr, nothing, make_func(path, columns, trait_name, chr))
-
-GWAS(path::String,
-     columns::Vector{String},
-     separator::Union{String, Char},
-     trait_name::String,
-     chr::Int,
-     trait_iso::String) = GWAS(path, columns, separator, trait_name, chr, trait_iso, make_func(path, columns, trait_name, chr, trait_iso))
+     chr::Int) = GWAS(path, columns, separator, nothing, chr, make_func(columns, separator))
 
 
-struct QtlStudy
+struct QtlStudy      # Change to see it directly as a collection of gwas??
     paths::Vector{String}
-    columns::Vector{GenVarInfo}
+    columns::Dict{GenVarInfo, Int64}
     separator::Union{Char, String}
+    acc_func::Function
 end
 
 # """
@@ -129,46 +134,50 @@ end
 """
 Return all existing files corresponding to the regex defined
 """
-function find_all_corresp(path::Vector{QtlPathPattern})::Vector{String}
+function find_all_corresp(path::Vector{QtlPathPattern})::Tuple{Vector{String}, Vector{String}}
     #...
-    return []
+    return [], []
 end
 
 
 """
 Find all existing files corresponding to the regex defined and constrait on gene names.
 """
-function find_all_corresp(path2::Vector{QtlPathPattern}, 
-                          genes::Vector{String})::Vector{String}
+function find_all_corresp(path::Vector{QtlPathPattern}, 
+                          genes::Vector{String})::Tuple{Vector{String}, Vector{String}}
     #...
-    return []
+    return [], []
 end
 
 
 """
 Find all existing files corresponding to the regex defined and constrait on gene names and chromosomes specified (particularly in a cis iv selection process).
+Returns a tuple of arrays corresponding to traits included and corresponding paths.
 """
-function find_all_corresp(path2::Vector{QtlPathPattern}, 
-                          genes::Vector{String},
-                          chr::Vector{String})::Vector{String}
+function find_all_corresp(path::Vector{QtlPathPattern}, 
+                          traits::Vector{String},
+                          chr::Vector{String})::Tuple{Vector{String}, Vector{String}}
     #...
-    return []
+    return [], []
 end
 
+
+QtlStudy((paths, traits), columns, separator, acc_func) = QtlStudy(paths, columns, separator, acc_func)
+
 QtlStudy(path::Vector{QtlPathPattern}, 
-         columns::Vector{ValTypeGen.GenVarInfo}, 
-         separator::Union{String, Char}) =  QtlStudy(find_all_corresp(path), columns, separator)
+         columns::Dict{GenVarInfo, Int64}, 
+         separator::Union{String, Char}) =  QtlStudy(find_all_corresp(path), columns, separator, make_func(columns, separator))
 
 QtlStudy(path::Vector{QtlPathPattern},
-         genes::Vector{String},
-         columns::Vector{ValTypeGen.GenVarInfo}, 
-         separator::Union{String, Char}) =  QtlStudy(find_all_corresp(path, genes), columns, separator)
+         traits::Vector{String},
+         columns::Dict{GenVarInfo, Int64},
+         separator::Union{String, Char}) =  QtlStudy(find_all_corresp(path, traits), columns, separator, make_func)
 
 QtlStudy(path::Vector{QtlPathPattern},
-         genes::Vector{String},
+         traits::Vector{String},
          chr::Vector{String},
-         columns::Vector{ValTypeGen.GenVarInfo}, 
-         separator::Union{String, Char}) =  QtlStudy(find_all_corresp(path, genes, chr), columns, separator)
+         columns::Dict{GenVarInfo, Int64}, 
+         separator::Union{String, Char}) =  QtlStudy(find_all_corresp(path, traits, chr), columns, separator)
 
 
 # Iteration overload for QtlStudy
@@ -178,12 +187,12 @@ function Base.iterate(iter::QtlStudy)
 end
 
 
-function Base.iterate(iter::QtlStudy, state)
+function Base.iterate(iter::QtlStudy, state)    #### Comment faire l'itération pour avoir un GWAS par exposition et pas necéssairement par fichier??
     count = state+1;
     if count>length(iter.paths)
         return nothing
     end
-    element = GWAS(iter.paths[count], iter.columns, iter.separator); ##### TO BE MODIF WITH NEW ADDINGS
+    element = GWAS(iter.paths[count], iter.columns, iter.separator);
     return (element, count)
 end
 
