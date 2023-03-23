@@ -3,6 +3,9 @@ uuid = "522c59b2-9202-4d04-bc5b-bdc4fcb95a1e"
 authors = ["Samuel Mathieu"]
 version = "0.1.0"
 
+[deps]
+Glob = "c27321d9-0574-5035-807b-f59d2c89b15c"
+
 [compat]
 julia = "1"
 
