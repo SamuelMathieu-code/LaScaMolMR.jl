@@ -1,6 +1,4 @@
 using MrPainter
 using Test
 
-@testset "MrPainter.jl" begin
-    #...
-end
+include("test_inputs.jl")

@@ -77,7 +77,7 @@ function make_func(columns::Dict{GenVarInfo, Int64},
                               (inv_logit(parse(Float64, line[columns[CI_HIGH]]))-inv_logit(parse(Float64, line[columns[CI_LOW]])))/3.91992, 
                               parse(Float64, line[columns[PVAL]])]
     else
-        throw(ErrorException("Not either (BETA, SE) or (OR, CI) in columns"))
+        throw(ErrorException("Not either (BETA, SE) or (ODD_RATIO, CI_LOW, CI_HIGH) in columns"))
     end
 
     # Treat cases of variant info formating
@@ -183,14 +183,6 @@ function find_all_corresp(path::Vector{QtlPathPattern},                         
 end
 
 
-QtlStudy(path_pattern::Vector{QtlPathPattern},
-         trait_v::Vector{String},
-         chr_v::Vector{Int64},
-         tss_v::Vector{Int64},
-         columns::Dict{GenVarInfo, Int64},
-         separator::Union{String, Char}) =  QtlStudy(find_all_corresp(path_pattern, trait_v, chr_v, tss_v), trait_v, chr_v, tss_v, columns, separator, make_func(columns, separator))
-
-
 QtlStudy(path_v::Vector{String},
          trait_v::Vector{String},
          chr_v::Vector{Int64},
@@ -199,16 +191,27 @@ QtlStudy(path_v::Vector{String},
          separator::Union{String, Char}) =  QtlStudy(path_v, trait_v, chr_v, tss_v, columns, separator, make_func(columns, separator))
 
 
+QtlStudy(path_pattern::Vector{QtlPathPattern},
+         trait_v::Vector{String},
+         chr_v::Vector{Int64},
+         tss_v::Vector{Int64},
+         columns::Dict{GenVarInfo, Int64},
+         separator::Union{String, Char}) =  QtlStudy(find_all_corresp(path_pattern, trait_v, chr_v, tss_v), trait_v, chr_v, tss_v, columns, separator, make_func(columns, separator))
+
+
 # Iteration overload for QtlStudy
 function Base.iterate(iter::QtlStudy)
-    element = GWAS(iter.path_v[1], ietr.columns, iter.separator, iter.trait_v[1], iter.chr_v[1], iter.tss_v[1], iter.acc_func)
+    element = GWAS(iter.path_v[1], iter.columns, iter.separator, iter.trait_v[1], iter.chr_v[1], iter.tss_v[1], iter.acc_func)
     return (element, 1)
 end
 
 
 function Base.iterate(iter::QtlStudy, state)    #### Comment faire l'itération pour avoir un GWAS par exposition et pas necéssairement par fichier??
     count = state + 1
-    element = GWAS(iter.path_v[count], ietr.columns, iter.separator, iter.trait_v[count], iter.chr_v[count], iter.tss_v[count], iter.acc_func)
+    if count > length(iter.path_v)
+        return nothing
+    end
+    element = GWAS(iter.path_v[count], iter.columns, iter.separator, iter.trait_v[count], iter.chr_v[count], iter.tss_v[count], iter.acc_func)
     return (element, count)
 end
 
