@@ -62,7 +62,7 @@ end
 
 
 """
-Return function that extracts (trait_name, [chr, pos], [beta, se, pval]) from line of file (string)  #### NOTE : CHANGE COLUMNS from VECTOR to DICT(GenVarInfo -> Int)
+Return function that extracts (trait_name, [chr, pos, effect allele, other allele], [beta, se, pval]) from line of file (string)  #### NOTE : CHANGE COLUMNS from VECTOR to DICT(GenVarInfo -> Int)
     Raises ErrorException if some information is missiong in `columns` argument.
 """
 function make_func(columns::Dict{GenVarInfo, Int64}, 
@@ -81,14 +81,20 @@ function make_func(columns::Dict{GenVarInfo, Int64},
     end
 
     # Treat cases of variant info formating
-    if haskey(columns, CHR) && haskey(columns, POS)
-        get_var = line -> [parse(Int64, line[columns[CHR]]), parse(Int64, line[columns[POS]])]
-    elseif haskey(columns, CHR_COLON_POS)
-        get_var = line -> [parse(Int64, x) for x in split(line[columns[CHR_COLON_POS]], ':')]
-    elseif haskey(columns, CHR_POS)
-        get_var = line -> [parse(Int64, x) for x in split(line[columns[CHR_POS]], '_')]
+    if haskey(columns, OTHER_ALLELE) && haskey(columns, EFFECT_ALLELE)
+
+        if haskey(columns, CHR) && haskey(columns, POS)
+            get_var = line -> [parse(Int64, line[columns[CHR]]), parse(Int64, line[columns[POS]]), line[columns[EFFECT_ALLELE]], line[columns[OTHER_ALLELE]]]
+        elseif haskey(columns, CHR_COLON_POS)
+            get_var = line -> [[parse(Int64, x) for x in split(line[columns[CHR_COLON_POS]], ':')]; [line[columns[EFFECT_ALLELE]], line[columns[OTHER_ALLELE]]]]
+        elseif haskey(columns, CHR_POS)
+            get_var = line -> [[parse(Int64, x) for x in split(line[columns[CHR_POS]], '_')]; [line[columns[EFFECT_ALLELE]], line[columns[OTHER_ALLELE]]]]
+        else
+            throw(ErrorException("Missing CHR and POS information"))
+        end
+    
     else
-        throw(ErrorException("Missing CHR and POS information"))
+        throw(ErrorException("Missing allele information : OTHER_ALLELE, EFFECT_ALLELE"))
     end
 
     if haskey(columns, TRAIT_NAME)                                       #### See how we can treat the case where trait_name is composed of base + iso in different columns
