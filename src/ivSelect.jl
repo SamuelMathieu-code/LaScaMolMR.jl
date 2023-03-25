@@ -20,7 +20,7 @@ function get_exp_ivs_cis(exposure::GWAS, window::Int64 = 500000, p_threshold::Fl
     
     for line in iterable
         trait, variant, effect = exposure.acc_func(line)
-        if (trait==exposure.trait_name &&
+        if ((trait==exposure.trait_name || isnothing(trait)) &&
             variant[1]==exposure.chr &&
             variant[2]>=exposure.tss-window &&
             variant[2]<=exposure.tss+window &&
