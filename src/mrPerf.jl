@@ -53,7 +53,7 @@ end
 
 
 """
-Inverse varianve weighted linear regression with simple weights (se(B_Y)^-2) Mendelian Randomization
+Inverse variance weighted linear regression with simple weights (se(B_Y)^-2) Mendelian Randomization
 """
 function mr_ivw(β_Y::Vector{Float64}, 
                 se_β_Y::Vector{Float64}, 
@@ -120,7 +120,7 @@ function mr_egger(β_Y::Vector{Float64},
 
     # heterogeneity
     if length(β_Y) ≥ 3
-        heter_stat = sum((residuals(regressor) ./ se_β_Y).^2)
+        heter_stat = sum((residuals(regressor) ./ se_β_Y).^2)  # Pourquoi c'est différent de 
         chisq = Chisq(length(β_X) - 2)
         heter_p = 1 - cdf(chisq, heter_stat)
     else
