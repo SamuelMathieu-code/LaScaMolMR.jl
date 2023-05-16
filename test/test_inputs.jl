@@ -1,4 +1,6 @@
 
+# DATA
+
 path = "some/path"
 columns_1 = Dict(TRAIT_NAME => 1, CHR => 2, POS => 3, BETA => 4, SE => 5, PVAL => 6, EFFECT_ALLELE => 7, OTHER_ALLELE => 8)
 columns_fails = Dict(TRAIT_NAME => 1, CHR_COLON_POS => 3, ODD_RATIO => 4, SE => 5, PVAL => 6, EFFECT_ALLELE => 7, OTHER_ALLELE => 8)
@@ -16,6 +18,8 @@ trait_1, variant_1, effect_1 = gwas_1.acc_func(str_1)
 trait_2, variant_2, effect_2 = gwas_2.acc_func(str_2)
 
 qtl = QtlStudy([path, path], [trait_name, trait_name], [chr, chr], [tss, tss], columns_1, sep)
+
+# TESTSET
 
 @testset "inputs.jl" begin
 

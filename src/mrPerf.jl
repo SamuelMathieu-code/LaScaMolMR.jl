@@ -12,25 +12,25 @@ Struct encapsulating the outputs of a Mendelian Randomization anaysis
 struct mr_output
     nivs::Int
     effect::Float64
-    CI_low::Float64
-    CI_high::Float64
+    ci_low::Float64
+    ci_high::Float64
     p::Float64
     intercept::Float64
     p_intercept::Float64
     ci_low_intercept::Float64
     ci_high_intercept::Float64
-    heter_stat::Foat64
+    heter_stat::Float64
     heter_p::Float64
 end
 
 
-"""
-Struct encasulating the outputs of Cochan's Q test
-"""
-struct cochran_output
-    Q::Float64
-    p::Float64
-end
+# """
+# Struct encasulating the outputs of Cochan's Q test
+# """
+# struct cochran_output
+#     Q::Float64
+#     p::Float64
+# end
 
 
 """
@@ -39,16 +39,16 @@ Wald ratio for Mendelian Randomization with a single instrumentl variable
 function mr_wald(β_Y::Float64, 
                  se_β_Y::Float64, 
                  β_X::Float64,  
-                 α::Float64 = 0.05)::mr_output
+                 α::Float64 = 0.05)::mr_output  # À véerifier que la distribustion normale convient!!!!!!!!
     
     θ = β_Y / β_X
-    se_θ = se_β_Y / β_X
+    se_θ = se_β_Y / abs(β_X)
     dh = Normal(0, se_θ)
     dobs = Normal(θ, se_θ)
-    p = 2*quantile(dh, -abs(θ/se_θ))
+    p = 2*cdf(dh, -abs(θ))
     ci_low, ci_high = quantile(dobs, α/2), quantile(dobs, 1-α/2)
     
-    return mr_output(1, θ, ci_low, ci_high, p, NaN, NaN, NaN, NaN, NaN, NaN)  ### ADD heter_stat
+    return mr_output(1, θ, ci_low, ci_high, p, NaN, NaN, NaN, NaN, NaN, NaN)
 end
 
 
@@ -84,16 +84,16 @@ function mr_ivw(β_Y::Vector{Float64},
 end
 
 
-"""
-Weighted Median linear regression Medndelian Randomization
-"""
-function mr_wm(β_Y::Vector{Float64}, 
-               se_β_Y::Vector{Float64}, 
-               β_X::Vector{Float64}, 
-               α::Float64 = 0.05)::mr_output 
+# """
+# Weighted Median linear regression Medndelian Randomization --> To come in the future
+# """
+# function mr_wm(β_Y::Vector{Float64}, 
+#                se_β_Y::Vector{Float64}, 
+#                β_X::Vector{Float64}, 
+#                α::Float64 = 0.05)::mr_output 
 
-    return mr_output()
-end
+#     return mr_output()
+# end
 
 
 """
@@ -105,7 +105,9 @@ function mr_egger(β_Y::Vector{Float64},
                   α::Float64 = 0.05)::mr_output
     
     # regression
-    regressor = lm(@formula(sign.(β_X).*β_Y ~ abs(β_X)), (;β_X, β_Y), wts = se_β_Y .^ (-2))
+    β_Y_abs = sign.(β_X).*β_Y
+    β_X_abs = abs.(β_X)
+    regressor = lm(@formula(β_Y_abs ~ β_X_abs), (;β_X_abs, β_Y_abs), wts = se_β_Y .^ (-2))
     θ_est = coef(regressor)
     se_θ_est = stderror(regressor)
 
@@ -134,13 +136,13 @@ function mr_egger(β_Y::Vector{Float64},
 end
 
 
-"""
-Cochran's Q test for heterogeneity
-"""
-function cochran(β_Y::Vector{Float64}, 
-                 se_β_Y::Vector{Float64}, 
-                 β_X::Vector{Float64}, 
-                 α::Float64 = 0.05)::cochran_output 
+# """
+# Cochran's Q test for heterogeneity
+# """
+# function cochran(β_Y::Vector{Float64}, 
+#                  se_β_Y::Vector{Float64}, 
+#                  β_X::Vector{Float64}, 
+#                  α::Float64 = 0.05)::cochran_output 
 
-    return cochran_output()
-end
+#     return cochran_output()
+# end
