@@ -26,15 +26,19 @@ end
     RSID
     CHR_POS
     CHR_COLON_POS
+    CHR_COLON_POS_ALLELES
+    A_EFFECT
+    A_OTHER
+    A1_COLON_A2
     BETA
     SE
     MAF
-    EFFECT_ALLELE # à rajouter dans l'extraction d'infos du GWAS
-    OTHER_ALLELE
     ODD_RATIO
     CI_LOW
     CI_HIGH
     PVAL
+    LOG10_PVAL
+    MINUS_LOG10_PVAL
     # add others ?
     OTHER_INFO
 end
@@ -212,7 +216,7 @@ function Base.iterate(iter::QtlStudy)
 end
 
 
-function Base.iterate(iter::QtlStudy, state)    #### Comment faire l'itération pour avoir un GWAS par exposition et pas necéssairement par fichier??
+function Base.iterate(iter::QtlStudy, state)
     count = state + 1
     if count > length(iter.path_v)
         return nothing
