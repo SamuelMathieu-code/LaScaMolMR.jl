@@ -62,7 +62,7 @@ GWAS(path::String,
 
 
 struct QTLStudy      # Change to see it directly as a collection of gwas??
-    path_v::Union{AbstractVector{String}}
+    path_v::AbstractVector{String}
     traits_for_each_path::AbstractVector{Any}
     trait_v
     chr_v
@@ -94,6 +94,11 @@ function QTLStudy_from_pattern(folder::String,
     columns::Union{Dict{Int, Any}, Dict{GenVarInfo}}, 
     separator::Char,
     only_corresp_chr::Bool = true)::QTLStudy
+
+    if path_pattern[1] isa String && startswith(path_pattern[1], Base.Filesystem.path_separator)
+        @warn "The first element of path_pattern starts with the path separator. Paths separators are not necessary in this place. It will be removed"
+        path_pattern[1]=path_pattern[1][length(Base.Filesystem.path_separator)+1:end]
+    end
 
     new_arr::Vector{String} = map(x -> (x isa String) ? x : "*", path_pattern)
     
