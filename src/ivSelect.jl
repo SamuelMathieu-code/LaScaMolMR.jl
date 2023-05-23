@@ -1,4 +1,3 @@
-using DataFrames
 
 PLINK = get(ENV, "PLINK_PATH", Sys.BINDIR) # Get PLINK_PATH as enc variable default being the environement's bin directory.
 

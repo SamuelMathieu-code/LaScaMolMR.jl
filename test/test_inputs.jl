@@ -13,7 +13,7 @@ tss = 8764
 gwas_1 = GWAS(path, columns_1, sep)
 gwas_2 = GWAS(path, columns_1, sep, trait_name)
 
-qtl = QtlStudy([path, path], [trait_name, trait_name], [chr, chr], [tss, tss], columns_1, sep)
+qtl = QTLStudy([path, path], [trait_name, trait_name], [chr, chr], [tss, tss], columns_1, sep)
 
 # TESTSET
 

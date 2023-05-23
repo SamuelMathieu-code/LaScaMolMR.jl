@@ -51,13 +51,13 @@ promote_rule(::Type{S}, ::Type{T}) where {S <: QtlPathPattern, T <: QtlPathPatte
 
 struct GWAS
     path::String
-    columns::Union{Dict{Int64, Union{GenVarInfo, String}}, Dict{Int64, GenVarInfo}}
+    columns::Union{Dict{Int, Any}, Dict{Int, GenVarInfo}}
     separator::Char
     trait_name::Union{Nothing, String}  # When searching pot ivs --> check trait_name id ok with ouput of GWAS.acc_func <=> GWAS.trait_name !== nothing
 end
 
 GWAS(path::String,
-     columns::Dict{Int, Any},
+     columns::Union{Dict{Int, Any}, Dict{Int, GenVarInfo}},
      separator::Char) = GWAS(path, columns, separator, nothing)
 
 
@@ -67,7 +67,7 @@ struct QTLStudy      # Change to see it directly as a collection of gwas??
     trait_v
     chr_v
     tss_v
-    columns::Union{Dict{Int, Any}, Dict{GenVarInfo}}
+    columns::Union{Dict{Int, Any}, Dict{Int, GenVarInfo}}
     separator::Char
 end
 
@@ -75,14 +75,14 @@ QTLStudy(path_v::AbstractVector{String},
     trait_v,
     chr_v,
     tss_v,
-    columns::Union{Dict{Int, Any}, Dict{GenVarInfo}},
-    separator::Char) = QTLStudy(path_v, repeat(nothing, length(path_v)), trait_v, chr_v, tss_v, columns, separator)
+    columns::Union{Dict{Int, Any}, Dict{Int, GenVarInfo}},
+    separator::Char) = QTLStudy(path_v, repeat([nothing], length(path_v)), trait_v, chr_v, tss_v, columns, separator)
 
 QTLStudy(path::String,
     trait_v::Union{AbstractVector{String}, DatasetColumn{Dataset, Vector{Union{Missing, String}}}},
     chr_v,
     tss_v,
-    columns::Union{Dict{Int, Any}, Dict{GenVarInfo}},
+    columns::Union{Dict{Int, Any}, Dict{Int, GenVarInfo}},
     separator::Char) = QTLStudy([path], [nothing], trait_v, chr_v, tss_v, columns, separator)
 
 
@@ -91,7 +91,7 @@ function QTLStudy_from_pattern(folder::String,
     trait_v, 
     chr_v, 
     tss_v, 
-    columns::Union{Dict{Int, Any}, Dict{GenVarInfo}}, 
+    columns::Union{Dict{Int, Any}, Dict{Int, GenVarInfo}}, 
     separator::Char,
     only_corresp_chr::Bool = true)::QTLStudy
 
@@ -173,7 +173,7 @@ function QTLStudy_from_pattern(folder::String,
     if !(files_traits isa Nothing)
         traits_for_each_file = trait_v[trait_index_files[indexes_keep_file]]   #vectors of traits corresponding to kept files
     else
-        traits_for_each_file = repeat(nothing, length(files)) # treat case when files are not trait_specific
+        traits_for_each_file = repeat([nothing], length(files)) # treat case when files are not trait_specific
     end
 
     return QTLStudy(files, traits_for_each_file, trait_v, chr_v, tss_v, columns, separator)
