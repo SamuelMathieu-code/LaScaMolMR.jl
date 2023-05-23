@@ -1,5 +1,6 @@
 
 using Glob
+using InMemoryDatasets
 
 ##################################################
 #                   GenVarInfo                   #
@@ -56,82 +57,137 @@ struct GWAS
 end
 
 GWAS(path::String,
-     columns::Union{Dict{Int64, Union{GenVarInfo, String}}, Dict{Int64, GenVarInfo}},
+     columns::Dict{Int, Any},
      separator::Char) = GWAS(path, columns, separator, nothing)
 
 
-struct QtlStudy      # Change to see it directly as a collection of gwas??
-    path_v::Vector{String}
-    trait_v::Union{Nothing, Vector{String}}
-    chr_v::Vector{Int8}
-    tss_v::Vector{Int32}
-    columns::Dict{Int64, Union{GenVarInfo, String}}
+struct QTLStudy      # Change to see it directly as a collection of gwas??
+    path_v::Union{AbstractVector{String}}
+    traits_for_each_path::AbstractVector{Any}
+    trait_v
+    chr_v
+    tss_v
+    columns::Union{Dict{Int, Any}, Dict{GenVarInfo}}
     separator::Char
 end
 
+QTLStudy(path_v::AbstractVector{String},
+    trait_v,
+    chr_v,
+    tss_v,
+    columns::Union{Dict{Int, Any}, Dict{GenVarInfo}},
+    separator::Char) = QTLStudy(path_v, repeat(nothing, length(path_v)), trait_v, chr_v, tss_v, columns, separator)
 
-# Ne fonctionne pas : à recoder plus tard
-#                    |
-#                    |
-#                    V
-# """
-# Find all existing files corresponding to specified path pattern and needed traits and chromosome specifications. 
-# To have all chromosomes for one trait : duplicate trait_name for all chromosomes
-# Returns a vector of corresponding paths
-# """
-# function find_all_corresp(path::Vector{QtlPathPattern},                                         # Note pour le futur : faire la duplication auto si chr ==0 ? ça pourrait etre cool.
-#                           trait_v::Vector{String},
-#                           chr_v::Vector{Int64})::Vector{String}
-#     if (length(chr_v) !== length(trait_v))
-#          throw(ErrorException("trait_v, chr_v should be of same length."))
-#     end
-#     l = length(trait_v)
-#     path_temp::String = ""
-#     path_v::Vector{String} = []
-#     for i = 1:1:l
-#         for ob in path
-#             if ob == CHR
-#                 path_temp = path_temp*string(chr_v[i])
-#             elseif ob == TRAIT_NAME
-#                 path_temp = path_temp*trait_v[i]
-#             elseif ob isa String
-#                 path_temp = path_temp*ob
-#             else
-#                 path_temp = path_temp*"*"
-#             end
-#         end
-#         found_paths = glob(path_temp)
-
-#         append!(path_v, found_paths)
-#     end
-#     return path_v
-# end
+QTLStudy(path::String,
+    trait_v::Union{AbstractVector{String}, DatasetColumn{Dataset, Vector{Union{Missing, String}}}},
+    chr_v,
+    tss_v,
+    columns::Union{Dict{Int, Any}, Dict{GenVarInfo}},
+    separator::Char) = QTLStudy([path], [nothing], trait_v, chr_v, tss_v, columns, separator)
 
 
-# """
-# struct defining format of QTL sumstats data and location
-# """
-# QtlStudy(path_pattern::Vector{QtlPathPattern},
-#          trait_v::Vector{String},
-#          chr_v::Vector{Int64},
-#          tss_v::Vector{Int64},
-#          columns::Dict{Int64, Union{GenVarInfo, String}},
-#          separator::Union{String, Char}) =  QtlStudy(find_all_corresp(path_pattern, trait_v, chr_v), trait_v, chr_v, tss_v, columns, separator)
+function QTLStudy_from_pattern(folder::String,
+    path_pattern::AbstractVector{Any}, 
+    trait_v, 
+    chr_v, 
+    tss_v, 
+    columns::Union{Dict{Int, Any}, Dict{GenVarInfo}}, 
+    separator::Char,
+    only_corresp_chr::Bool = true)::QTLStudy
+
+    new_arr::Vector{String} = map(x -> (x isa String) ? x : "*", path_pattern)
+    
+    pattern_str = accumulate(*, new_arr)[end]
+    patt = Glob.GlobMatch(pattern_str)
+    files = glob(patt, folder)
+    
+    trait_index = findfirst(x->x==TRAIT_NAME, path_pattern)
+    chr_index = findfirst(x -> x==CHR, path_pattern)
+
+    #regex version of pattern
+    pattern_v = map(x -> (x isa String) ? raw""*x : r"(.*?)", path_pattern)
+    if endswith(folder, Base.Filesystem.path_separator)
+        pattern = folder * accumulate(*, pattern_v)[end]
+    else
+        pattern = folder * Base.Filesystem.path_separator * accumulate(*, pattern_v)[end]
+    end
+    
+    #verif trait in trait_v
+    files_traits = nothing
+    if !(trait_index isa Nothing) && trait_index != 1
+        count = 1
+        for i in 1:trait_index-1
+            if path_pattern[i] isa GenVarInfo
+                count += 1
+            end
+        end
+        f(x) = match(pattern, x).captures[count]
+        files_traits = map(f, files)
+
+    elseif trait_index == 1
+        count = 1
+        f2(x) = match(pattern, x).captures[count]
+        files_traits = map(f2, files)
+    else
+        files_traits_b = [true for i in 1:length(files)]
+    end
+
+    #verify good chr
+    files_chr = nothing
+    if only_corresp_chr
+        if !(chr_index isa Nothing) && chr_index != 1
+            count = 1
+            for i in 1:chr_index-1
+                if path_pattern[i] isa GenVarInfo
+                    count += 1
+                end
+            end
+            g(x) = parse(Int, match(pattern, x).captures[count])
+            files_chr = map(g, files)
+    
+        elseif trait_index == 1
+            g2(x) = parse(Int, match(pattern, x).captures[1])
+            files_chr = map(g2, files)
+        else
+            files_chr_b = [true for i in 1:length(files)]
+        end
+    else
+        files_chr_b = [true for i in 1:length(files)]
+    end
+    if !(files_traits isa Nothing)
+        trait_index_files = [findfirst(x->(x==y), trait_v) for y in files_traits] # index of TRAIT in trait_v, and chr_v, tss_v for tss
+        files_traits_b = map(x->(!(x isa Nothing)), trait_index_files)           # array of files ok for TRAIT condition
+    end
+    if !(files_chr isa Nothing) && only_corresp_chr
+        files_chr_b = [(trait_index_files[i] isa Nothing) ? false : (files_chr[i] == chr_v[trait_index_files[i]]) for i in 1:length(files)]
+    end
+
+    indexes_keep_file = files_traits_b .& files_chr_b
+
+    files = files[indexes_keep_file]    #vector of kept files
+    if !(files_traits isa Nothing)
+        traits_for_each_file = trait_v[trait_index_files[indexes_keep_file]]   #vectors of traits corresponding to kept files
+    else
+        traits_for_each_file = repeat(nothing, length(files)) # treat case when files are not trait_specific
+    end
+
+    return QTLStudy(files, traits_for_each_file, trait_v, chr_v, tss_v, columns, separator)
+end
 
 
 # Iteration overload for QtlStudy
-function Base.iterate(iter::QtlStudy)
+function Base.iterate(iter::QTLStudy)
     element = GWAS(iter.path_v[1], iter.columns, iter.separator, iter.trait_v[1])
     return (element, 1)
 end
 
 
-function Base.iterate(iter::QtlStudy, state)
+function Base.iterate(iter::QTLStudy, state)
     count = state + 1
     if count > length(iter.path_v)
         return nothing
     end
-    element = GWAS(iter.path_v[count], iter.columns, iter.separator)
+    element = GWAS(iter.path_v[count], iter.columns, iter.separator, iter.traits_for_each_path[count])
     return (element, count)
 end
 
