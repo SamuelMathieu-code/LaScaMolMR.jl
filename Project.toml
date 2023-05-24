@@ -4,6 +4,7 @@ authors = ["Samuel Mathieu"]
 version = "0.1.0"
 
 [deps]
+DLMReader = "e1d33f9a-7203-49d2-8e1a-e3c4f85197b8"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 GLM = "38e38edf-8417-5370-95a0-9cbb8c7f171a"
 Glob = "c27321d9-0574-5035-807b-f59d2c89b15c"

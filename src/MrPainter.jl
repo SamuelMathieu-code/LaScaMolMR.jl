@@ -8,7 +8,6 @@ export mr_egger, mr_ivw, mr_wald
 # ... others to come
 
 include("inputs.jl")
-include("ivSelect.jl")
 include("mrPerf.jl")
 # ... others to come
 end

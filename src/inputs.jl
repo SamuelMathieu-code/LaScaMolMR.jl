@@ -14,8 +14,6 @@ end
 
 @enum GenVarInfo begin
     TRAIT_NAME
-    # TRAIT_NAME_ISO
-    # TRAIT_ISO       # à voir .....
     CHR
     POS
     RSID
@@ -34,7 +32,6 @@ end
     PVAL
     LOG10_PVAL
     MINUS_LOG10_PVAL
-    # add others ?
     OTHER_INFO
 end
 
