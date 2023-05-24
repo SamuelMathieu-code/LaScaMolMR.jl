@@ -9,5 +9,6 @@ export mr_egger, mr_ivw, mr_wald
 
 include("inputs.jl")
 include("mrPerf.jl")
+include("utils.jl")
 # ... others to come
 end

@@ -16,23 +16,12 @@ end
     TRAIT_NAME
     CHR
     POS
-    RSID
-    CHR_POS
-    CHR_COLON_POS
-    CHR_COLON_POS_ALLELES
     A_EFFECT
     A_OTHER
-    A1_COLON_A2
     BETA
     SE
-    MAF
-    ODD_RATIO
-    CI_LOW
-    CI_HIGH
     PVAL
-    LOG10_PVAL
     MINUS_LOG10_PVAL
-    OTHER_INFO
 end
 
 @exportinstances GenVarInfo
@@ -49,23 +38,23 @@ promote_rule(::Type{S}, ::Type{T}) where {S <: QtlPathPattern, T <: QtlPathPatte
 struct GWAS
     path::String
     columns::Union{Dict{Int, Any}, Dict{Int, GenVarInfo}}
-    separator::Char
+    separator::Union{Char, AbstractVector{Char}}
     trait_name::Union{Nothing, String}  # When searching pot ivs --> check trait_name id ok with ouput of GWAS.acc_func <=> GWAS.trait_name !== nothing
 end
 
 GWAS(path::String,
      columns::Union{Dict{Int, Any}, Dict{Int, GenVarInfo}},
-     separator::Char) = GWAS(path, columns, separator, nothing)
+     separator::Union{Char, AbstractVector{Char}}) = GWAS(path, columns, separator, nothing)
 
 
-struct QTLStudy      # Change to see it directly as a collection of gwas??
+mutable struct QTLStudy      # Change to see it directly as a collection of gwas??
     path_v::AbstractVector{String}
     traits_for_each_path::AbstractVector{Any}
     trait_v
     chr_v
     tss_v
     columns::Union{Dict{Int, Any}, Dict{Int, GenVarInfo}}
-    separator::Char
+    separator::Union{Char, AbstractVector{Char}}
 end
 
 QTLStudy(path_v::AbstractVector{String},
@@ -73,14 +62,14 @@ QTLStudy(path_v::AbstractVector{String},
     chr_v,
     tss_v,
     columns::Union{Dict{Int, Any}, Dict{Int, GenVarInfo}},
-    separator::Char) = QTLStudy(path_v, repeat([nothing], length(path_v)), trait_v, chr_v, tss_v, columns, separator)
+    separator::Union{Char, AbstractVector{Char}}) = QTLStudy(path_v, repeat([nothing], length(path_v)), trait_v, chr_v, tss_v, columns, separator)
 
 QTLStudy(path::String,
     trait_v::Union{AbstractVector{String}, DatasetColumn{Dataset, Vector{Union{Missing, String}}}},
     chr_v,
     tss_v,
     columns::Union{Dict{Int, Any}, Dict{Int, GenVarInfo}},
-    separator::Char) = QTLStudy([path], [nothing], trait_v, chr_v, tss_v, columns, separator)
+    separator::Union{Char, AbstractVector{Char}}) = QTLStudy([path], [nothing], trait_v, chr_v, tss_v, columns, separator)
 
 
 function QTLStudy_from_pattern(folder::String,
@@ -89,7 +78,7 @@ function QTLStudy_from_pattern(folder::String,
     chr_v, 
     tss_v, 
     columns::Union{Dict{Int, Any}, Dict{Int, GenVarInfo}}, 
-    separator::Char,
+    separator::Union{Char, AbstractVector{Char}},
     only_corresp_chr::Bool = true)::QTLStudy
 
     if path_pattern[1] isa String && startswith(path_pattern[1], Base.Filesystem.path_separator)
@@ -197,5 +186,18 @@ function Base.iterate(iter::QTLStudy, state)
     end
     element = GWAS(iter.path_v[count], iter.columns, iter.separator, iter.traits_for_each_path[count])
     return (element, count)
+end
+
+function Base.getindex(iter::QTLStudy, i::Int)
+    return GWAS(iter.path_v[i], iter.columns, iter.separator, iter.traits_for_each_path[i])
+end
+
+function Base.getindex(iter::QTLStudy, i::Union{AbstractUnitRange, AbstractVector{Int}})
+    return [GWAS(iter.path_v[j], iter.columns, iter.separator, iter.traits_for_each_path[j]) for j in i]
+    
+end
+
+function Base.lastindex(iter::QTLStudy)
+    return lastindex(iter.path_v)
 end
 
