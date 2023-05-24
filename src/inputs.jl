@@ -97,20 +97,26 @@ function QTLStudy_from_pattern(folder::String,
 
     if path_pattern[1] isa String && startswith(path_pattern[1], Base.Filesystem.path_separator)
         @warn "The first element of path_pattern starts with the path separator. Paths separators are not necessary in this place. It will be removed"
-        path_pattern[1]=path_pattern[1][length(Base.Filesystem.path_separator)+1:end]
+        path_pattern_=[path_pattern[1][length(Base.Filesystem.path_separator)+1:end]; path_pattern[2:end]]
+    else
+        path_pattern_ = path_pattern
     end
 
-    new_arr::Vector{String} = map(x -> (x isa String) ? x : "*", path_pattern)
+    if only_corresp_chr == true && !(TRAIT_NAME in path_pattern_)
+        only_corresp_chr = false
+    end
+
+    new_arr::Vector{String} = map(x -> (x isa String) ? x : "*", path_pattern_)
     
     pattern_str = accumulate(*, new_arr)[end]
     patt = Glob.GlobMatch(pattern_str)
     files = glob(patt, folder)
     
-    trait_index = findfirst(x->x==TRAIT_NAME, path_pattern)
-    chr_index = findfirst(x -> x==CHR, path_pattern)
+    trait_index = findfirst(x->x==TRAIT_NAME, path_pattern_)
+    chr_index = findfirst(x -> x==CHR, path_pattern_)
 
     #regex version of pattern
-    pattern_v = map(x -> (x isa String) ? raw""*x : r"(.*?)", path_pattern)
+    pattern_v = map(x -> (x isa String) ? raw""*x : r"(.*?)", path_pattern_)
     if endswith(folder, Base.Filesystem.path_separator)
         pattern = folder * accumulate(*, pattern_v)[end]
     else
@@ -122,7 +128,7 @@ function QTLStudy_from_pattern(folder::String,
     if !(trait_index isa Nothing) && trait_index != 1
         count = 1
         for i in 1:trait_index-1
-            if path_pattern[i] isa GenVarInfo
+            if path_pattern_[i] isa GenVarInfo
                 count += 1
             end
         end
@@ -143,7 +149,7 @@ function QTLStudy_from_pattern(folder::String,
         if !(chr_index isa Nothing) && chr_index != 1
             count = 1
             for i in 1:chr_index-1
-                if path_pattern[i] isa GenVarInfo
+                if path_pattern_[i] isa GenVarInfo
                     count += 1
                 end
             end
