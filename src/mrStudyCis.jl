@@ -108,7 +108,7 @@ function mrStudyCis(exposure::QTLStudy,
     ref_dict = Dict(zip(exposure.trait_v, zip(exposure.chr_v, exposure.tss_v)))
 
     # boolan tells if the variant is significant causal on exposure and if in window arround good tss
-    in_window(s::SubArray) = (s[1] == ref_dict[s[3]][1] && abs(s[2]-ref_dict[s[3]][2])≤window && s[4]<treshold)
+    in_window(s::SubArray) = (s[1] == ref_dict[s[3]][1] && abs(s[2]-ref_dict[s[3]][2])≤window && s[4]<p_tresh)
     
     #first iter
     file = exposure[1]
