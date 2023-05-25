@@ -1,6 +1,7 @@
 using DLMReader
 using InMemoryDatasets
 import Base.Threads.@threads
+using Folds
 
 GenVarInfo_Types = Dict(TRAIT_NAME => String,
                         CHR => Int8,
@@ -118,27 +119,24 @@ function mrStudyCis(exposure::QTLStudy,
 
     add_trait_name_b = !(TRAIT_NAME in values(exposure.columns))
 
+    
     for i in 1:lastindex(data_vect)
         file = exposure[i]
-        d = filereader(file.path, delimiter = file.separator, header = header, types = types, skipto=2, makeunique=true, eolwarn=false)[:,collect(keys(file.columns))]
+        d = filereader(file.path, delimiter = file.separator, header = header, types = types, skipto=2, makeunique=true, eolwarn=false, threads = false)[:,collect(keys(file.columns))]
         if add_trait_name_b
             d.trait = repeat([file.trait_name], nrow(d))
         end
         if col_log_pval != -1
-            modify!(d, :pval => to_p)
+            modify!(d, :pval => to_p, theads = false)
         end
-        filter!(d, [:chr, :pos, :trait, :pval], type = in_window) # dataset filtered for window and significance
+        filter!(d, [:chr, :pos, :trait, :pval], type = in_window, threads = false) # dataset filtered for window and significance
         data_vect[i] = d
         print("\r$i")
     end
 
     println("parsed all files, joining them")
 
-    qtl_d = Dataset()
-
-    for d in data_vect
-        vcat(qtl_d, d)
-    end
+    qtl_d = Folds.reduce(vcat, data_vect, init = Dataset())
 
     # Check for biallelic? pour l'instant : faire confiance à PLINK
 
