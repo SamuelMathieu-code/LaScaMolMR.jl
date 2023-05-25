@@ -37,20 +37,7 @@ function make_types_and_headers(file::QTLStudy)::Tuple{Dict{Int, DataType}, Vect
     return header, types
 end
 
-###############################
-#         MrStudyCis          #
-###############################
-
-"""
-Perform a Mendelian Randomization study with exposure QTL and outcome GWAS
-"""
-function mrStudyCis(exposure::QTLStudy, 
-    outcome::GWAS, 
-    approach::String="naive", 
-    p_thresh::Float = 5e-3, 
-    window::Int = 500000, 
-    r2_tresh::Float = 0.1)::AbstractDataset
-    
+function verify_and_simplify_columns(exposure::QTLStudy)
     trait_each_path_nothing =  nothing in exposure.traits_for_each_path
     if trait_each_path_nothing && !(TRAIT_NAME in values(exposure.columns))
         throw(ArgumentError("exposure misses TRAIT_NAME information"))
@@ -85,18 +72,37 @@ function mrStudyCis(exposure::QTLStudy,
             col_log_pval = key
         end
     end
+
     if col_log_pval != -1
         new_cols_exposure[MINUS_LOG10_PVAL] = col_log_pval
         cols_ok[PVAL] = true
     end
+
     for key in keys(cols_ok)
         if cols_ok[key] != true
             throw(ArgumentError("Missing information in columns. Should contain at least : CHR, POS, A_EFFECT, A_OTHER, BETA, SE, PVAL/MINUS_LOG10_PVAL."))
         end
     end
-    exposure.columns = new_cols_exposure
-    types, header = make_types_and_headers(exposure)
+    exposure.columns = new_cols_exposure;
 
+end
+
+###############################
+#         MrStudyCis          #
+###############################
+
+"""
+Perform a Mendelian Randomization study with exposure QTL and outcome GWAS
+"""
+function mrStudyCis(exposure::QTLStudy, 
+    outcome::GWAS, 
+    approach::String="naive", 
+    p_thresh::Float = 5e-3, 
+    window::Int = 500000, 
+    r2_tresh::Float = 0.1)::AbstractDataset
+    
+    verify_and_simplify_columns(exposure)
+    types, header = make_types_and_headers(exposure)
     
     #Dictionary containing tss
     ref_dict = Dict(zip(exposure.trait_v, zip(exposure.chr_v, exposure.tss_v)))
