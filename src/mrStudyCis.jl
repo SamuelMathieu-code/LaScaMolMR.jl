@@ -2,6 +2,11 @@ using DLMReader
 using InMemoryDatasets
 import Base.Threads.@threads
 using Folds
+using Chain
+
+    ########################
+    #       Constants      #
+    ########################
 
 GenVarInfo_Types = Dict(TRAIT_NAME => String,
                         CHR => Int8,
@@ -12,27 +17,48 @@ GenVarInfo_Types = Dict(TRAIT_NAME => String,
                         SE => Float64,
                         PVAL => Float64,
                         MINUS_LOG10_PVAL => Float64)
-GenVarInfo_Symbols = Dict(TRAIT_NAME => :trait,
+
+GenVarInfo_Symbols_exp = Dict(TRAIT_NAME => :trait,
                           CHR => :chr,
                           POS => :pos,
-                          A_EFFECT => :a_effect,
-                          A_OTHER => :a_other,
-                          BETA => :β,
-                          SE => :se,
-                          PVAL => :pval,
-                          MINUS_LOG10_PVAL => :pval)
+                          A_EFFECT => :a_effect_exp,
+                          A_OTHER => :a_other_exp,
+                          BETA => :β_exp,
+                          SE => :se_exp,
+                          PVAL => :pval_exp,
+                          MINUS_LOG10_PVAL => :pval_exp)
 
-function make_types_and_headers(file::QTLStudy)::Tuple{Dict{Int, DataType}, Vector{Symbol}}
+GenVarInfo_Symbols_out = Dict(TRAIT_NAME => :trait,
+                          CHR => :chr,
+                          POS => :pos,
+                          A_EFFECT => :a_effect_out,
+                          A_OTHER => :a_other_out,
+                          BETA => :β_out,
+                          SE => :se_out,
+                          PVAL => :pval_out,
+                          MINUS_LOG10_PVAL => :pval_out)
+
+
+    ########################
+    #     utils funcs      #
+    ########################
+
+function make_types_and_headers(file::Union{QTLStudy, GWAS})::Tuple{Dict{Int, DataType}, Vector{Symbol}}
     types::Dict{Int, DataType} = Dict()
     n_cols_file::Int = 0
-    open(file.path_v[1], "r") do f
-        n_cols_file = (file.separator isa AbstractVector) ? count(i->(i in file.separator), readline(file.path_v[1])) + 1 : count(file.separator, readline(file.path_v[1])) + 1
+
+    path_ex = (file isa GWAS) ? file.path : file.path_v[1]
+
+    open(path_ex, "r") do f
+        n_cols_file = (file.separator isa AbstractVector) ? count(i->(i in file.separator), readline(path_ex)) + 1 : count(file.separator, readline(path_ex)) + 1
     end
+
     header = repeat([:x], n_cols_file)
+
     for i in 1:n_cols_file
         if haskey(file.columns, i)
             types[i] = GenVarInfo_Types[file.columns[i]]
-            header[i] = GenVarInfo_Symbols[file.columns[i]]
+            header[i] = (file isa GWAS) ? GenVarInfo_Symbols_out[file.columns[i]] : GenVarInfo_Symbols_exp[file.columns[i]]
         else
             types[i] = String
         end
@@ -40,7 +66,8 @@ function make_types_and_headers(file::QTLStudy)::Tuple{Dict{Int, DataType}, Vect
     return types, header
 end
 
-function verify_and_simplify_columns(exposure::QTLStudy)::Int
+
+function verify_and_simplify_columns(exposure::Union{QTLStudy, GWAS})::Int
 
     trait_each_path_nothing =  nothing in exposure.traits_for_each_path
     if trait_each_path_nothing && !(TRAIT_NAME in values(exposure.columns))
@@ -92,9 +119,82 @@ function verify_and_simplify_columns(exposure::QTLStudy)::Int
 
 end
 
-###############################
-#         MrStudyCis          #
-###############################
+
+function read_files(exposure::QTLStudy, 
+    col_log_pval::Int, 
+    types::Dict{Int, DataType}, 
+    header::Vector{Symbol},
+    window::Int,
+    p_tresh::Float64,
+    filtered::Bool =false)::Dataset
+
+    # Dicionary of trait -- tss
+    ref_dict = Dict(zip(exposure.trait_v, zip(exposure.chr_v, exposure.tss_v)))
+
+    # boolan tells if the variant is significant causal on exposure and if in window arround good tss
+    in_window(s::SubArray) = (s[1] == ref_dict[s[3]][1] && abs(s[2]-ref_dict[s[3]][2])≤window && s[4]<p_tresh)
+    
+    data_vect = Vector{Dataset}(undef, length(exposure))
+
+    add_trait_name_b = !(TRAIT_NAME in values(exposure.columns))
+
+    if Base.Threads.nthreads() > length(exposure) ### Case when nore threads than files -> read each file in //
+        for i in 1:lastindex(data_vect)
+            file = exposure[i]
+            d = filereader(file.path, delimiter = file.separator, 
+                           header = header, types = types, skipto=2, 
+                           makeunique=true, eolwarn=false)[:,collect(keys(file.columns))]
+            
+            if add_trait_name_b
+                d.trait = repeat([file.trait_name], nrow(d))
+            end
+            
+            if col_log_pval != -1
+                modify!(d, :pval => to_p)
+            end
+
+            if !filtered
+                filter!(d, [:chr, :pos, :trait, :pval], 
+                        type = in_window) # dataset filtered for window and significance
+            end
+            
+            data_vect[i] = d
+        end
+    else                                        ### Case when more files than threads -> read multiple files in //
+        @threads for i in 1:lastindex(data_vect)
+            file = exposure[i]
+            d = filereader(file.path, delimiter = file.separator, 
+                           header = header, types = types, skipto=2, 
+                           makeunique=true, eolwarn=false, 
+                           threads = flase)[:,collect(keys(file.columns))]
+            
+            if add_trait_name_b
+                d.trait = repeat([file.trait_name], nrow(d))
+            end
+            
+            if col_log_pval != -1
+                modify!(d, :pval => to_p, threads = false)
+            end
+
+            if !filtered
+                filter!(d, [:chr, :pos, :trait, :pval], 
+                        type = in_window, threads = false) # dataset filtered for window and significance
+            end
+            
+            data_vect[i] = d
+        end
+    end
+
+    data_filtered = Folds.reduce(vcat, data_vect, init = Dataset())
+
+    return data_filtered
+end
+
+
+    #########################
+    #      MrStudyCis       #
+    #########################
+
 
 """
 Perform a Mendelian Randomization study with exposure QTL and outcome GWAS
@@ -104,42 +204,26 @@ function mrStudyCis(exposure::QTLStudy,
     approach::String="naive", 
     p_tresh::Float64 = 5e-3, 
     window::Int = 500000, 
-    r2_tresh::Float64 = 0.1)::AbstractDataset
+    r2_tresh::Float64 = 0.1,
+    exposure_filtered = false,
+    outcome_filtered = false)::AbstractDataset
     
     col_log_pval = verify_and_simplify_columns(exposure)
     types, header = make_types_and_headers(exposure)
     
-    #Dictionary containing tss
-    ref_dict = Dict(zip(exposure.trait_v, zip(exposure.chr_v, exposure.tss_v)))
-
-    # boolan tells if the variant is significant causal on exposure and if in window arround good tss
-    in_window(s::SubArray) = (s[1] == ref_dict[s[3]][1] && abs(s[2]-ref_dict[s[3]][2])≤window && s[4]<p_tresh)
+    qtl_d = read_files(exposure, col_log_pval, types, header, window, p_tresh, exposure_filtered)
     
-    data_vect = Vector{Dataset}(undef, length(exposure.path_v))
-
-    add_trait_name_b = !(TRAIT_NAME in values(exposure.columns))
-
+    col_log_pval = verify_and_simplify_columns(outcome)
+    types, header = make_types_and_headers(outcome)
+    gwas_d = filereader(outcome.path, 
+                        delimiter = outcome.separator, 
+                        header = header, types = types, skipto=2, 
+                        makeunique=true, eolwarn=false)[:,collect(keys(outcome.columns))]
+    joined_d = innerjoin(gwas_d, qtl_d, on = [:chr, :pos], makeunique = true)
+    groupby!(joined_d, :prots, stable = false)
     
-    for i in 1:lastindex(data_vect)
-        file = exposure[i]
-        d = filereader(file.path, delimiter = file.separator, header = header, types = types, skipto=2, makeunique=true, eolwarn=false, threads = false)[:,collect(keys(file.columns))]
-        if add_trait_name_b
-            d.trait = repeat([file.trait_name], nrow(d))
-        end
-        if col_log_pval != -1
-            modify!(d, :pval => to_p, theads = false)
-        end
-        filter!(d, [:chr, :pos, :trait, :pval], type = in_window, threads = false) # dataset filtered for window and significance
-        data_vect[i] = d
-        print("\r$i")
-    end
-
-    println("parsed all files, joining them")
-
-    qtl_d = Folds.reduce(vcat, data_vect, init = Dataset())
-
-    # Check for biallelic? pour l'instant : faire confiance à PLINK
-
-    return qtl_d
+    #### for d in eachgroup(joined_d) -> Plink + MR (implement in NaiveCis)
+    
+    return joined_d
 
 end

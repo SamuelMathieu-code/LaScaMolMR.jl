@@ -201,3 +201,6 @@ function Base.lastindex(iter::QTLStudy)
     return lastindex(iter.path_v)
 end
 
+function Base.length(iter::QTLStudy)
+    return length(iter.path_v)
+end
