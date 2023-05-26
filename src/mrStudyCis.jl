@@ -208,17 +208,20 @@ function mrStudyCis(exposure::QTLStudy,
     exposure_filtered = false,
     outcome_filtered = false)::AbstractDataset
     
+    #qtl_data
     col_log_pval = verify_and_simplify_columns(exposure)
     types, header = make_types_and_headers(exposure)
-    
     qtl_d = read_files(exposure, col_log_pval, types, header, window, p_tresh, exposure_filtered)
     
+    #gwas_data
     col_log_pval = verify_and_simplify_columns(outcome)
     types, header = make_types_and_headers(outcome)
     gwas_d = filereader(outcome.path, 
                         delimiter = outcome.separator, 
                         header = header, types = types, skipto=2, 
                         makeunique=true, eolwarn=false)[:,collect(keys(outcome.columns))]
+
+    #joined data
     joined_d = innerjoin(gwas_d, qtl_d, on = [:chr, :pos], makeunique = true)
     groupby!(joined_d, :prots, stable = false)
     
