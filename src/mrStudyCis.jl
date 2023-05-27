@@ -205,8 +205,7 @@ function mrStudyCis(exposure::QTLStudy,
     p_tresh::Float64 = 5e-3, 
     window::Int = 500000, 
     r2_tresh::Float64 = 0.1,
-    exposure_filtered = false,
-    outcome_filtered = false)::AbstractDataset
+    exposure_filtered = false)::AbstractDataset
     
     #qtl_data
     col_log_pval = verify_and_simplify_columns(exposure)
@@ -227,6 +226,6 @@ function mrStudyCis(exposure::QTLStudy,
     
     #### for d in eachgroup(joined_d) -> Plink + MR (implement in NaiveCis)
     
-    return joined_d
+    return NaiveCis(joined_d, r2_tresh)
 
 end

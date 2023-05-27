@@ -10,5 +10,7 @@ export mr_egger, mr_ivw, mr_wald
 include("inputs.jl")
 include("mrPerf.jl")
 include("utils.jl")
+include("naiveCis.jl")
+include("mrStudyCis.jl")
 # ... others to come
 end
