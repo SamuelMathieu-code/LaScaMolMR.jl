@@ -222,7 +222,7 @@ function mrStudyCis(exposure::QTLStudy,
 
     #joined data
     joined_d = innerjoin(gwas_d, qtl_d, on = [:chr, :pos], makeunique = true)
-    groupby!(joined_d, :prots, stable = false)
+    groupby!(joined_d, :trait, stable = false)
     
     #### for d in eachgroup(joined_d) -> Plink + MR (implement in NaiveCis)
     
