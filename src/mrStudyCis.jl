@@ -1,6 +1,7 @@
 using DLMReader
 using InMemoryDatasets
 import Base.Threads.@threads
+using SnpArrays
 using Folds
 using Chain
 
@@ -150,7 +151,7 @@ function read_files(exposure::QTLStudy,
             end
             
             if col_log_pval != -1
-                modify!(d, :pval => to_p)
+                modify!(d, :pval => x -> exp10.(-x))
             end
 
             if !filtered
@@ -166,14 +167,14 @@ function read_files(exposure::QTLStudy,
             d = filereader(file.path, delimiter = file.separator, 
                            header = header, types = types, skipto=2, 
                            makeunique=true, eolwarn=false, 
-                           threads = flase)[:,collect(keys(file.columns))]
+                           threads = false)[:,collect(keys(file.columns))]
             
             if add_trait_name_b
                 d.trait = repeat([file.trait_name], nrow(d))
             end
             
             if col_log_pval != -1
-                modify!(d, :pval => to_p, threads = false)
+                modify!(d, :pval => x -> exp10.(-x), threads = false)
             end
 
             if !filtered
@@ -201,12 +202,17 @@ Perform a Mendelian Randomization study with exposure QTL and outcome GWAS
 """
 function mrStudyCis(exposure::QTLStudy, 
     outcome::GWAS, 
+    bedbimfam_dirnames::AbstractArray{String},
     approach::String="naive", 
     p_tresh::Float64 = 5e-3, 
     window::Int = 500000, 
     r2_tresh::Float64 = 0.1,
-    exposure_filtered = false)::AbstractDataset
+    exposure_filtered = false,
+    mr_methods::AbstractVector{Function} = [mr_egger, mr_ivw]
+    )::Dataset
     
+    plink_files_load_tsk = @async global GenotypesArr = [SnpData(SnpArrays.datadir(file)) for file in bedbimfam_dirnames]
+
     #qtl_data
     col_log_pval = verify_and_simplify_columns(exposure)
     types, header = make_types_and_headers(exposure)
@@ -223,9 +229,24 @@ function mrStudyCis(exposure::QTLStudy,
     #joined data
     joined_d = innerjoin(gwas_d, qtl_d, on = [:chr, :pos], makeunique = true)
     groupby!(joined_d, :trait, stable = false)
-    
-    #### for d in eachgroup(joined_d) -> Plink + MR (implement in NaiveCis)
-    
-    return NaiveCis(joined_d, r2_tresh)
 
+    # wait for lod plink files and sort them
+    wait(plink_files_load_tsk)
+    @threads for i in 1:lastindex(GenotypesArr)
+        GenotypesArr[i].snp_info.idx = collect(1:size(GenotypesArr[i].snp_info, 1))
+        GenotypesArr[i].snp_info.chr_pos = collect(
+            zip(parse.(Int8, GenotypesArr[i].snp_info.chromosome), 
+            GenotypesArr[i].snp_info.position)
+        )
+        sort!(GenotypesArr[i].snp_info, :chr_pos)
+    end
+
+    one_file_per_chr_plink = length(bedbimfam_dirnames) > 1
+
+    #### for d in eachgroup(joined_d) -> Plink + MR (implement in NaiveCis)
+    if approach == "naive"
+        return NaiveCis(joined_d, r2_tresh, GenotypesArr, one_file_per_chr_plink, mr_methods)
+    elseif approach == "test"
+        return Dataset()
+    end
 end

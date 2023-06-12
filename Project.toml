@@ -11,6 +11,9 @@ Folds = "41a02a25-b8f0-4f67-bc48-60067656b558"
 GLM = "38e38edf-8417-5370-95a0-9cbb8c7f171a"
 Glob = "c27321d9-0574-5035-807b-f59d2c89b15c"
 InMemoryDatasets = "5c01b14b-ab03-46ff-b164-14c663efdd9f"
+IterTools = "c8e1da08-722c-5040-9ed9-7db0dc04731e"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+SnpArrays = "4e780e97-f5bf-4111-9dc4-b70aaf691b06"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]

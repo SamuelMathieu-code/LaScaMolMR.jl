@@ -7,7 +7,7 @@ using GLM
 
 
 """
-Struct encapsulating the outputs of a Mendelian Randomization anaysis
+Struct encapsulating the outputs of a Mendelian Randomization analysis
 """
 struct mr_output
     nivs::Int
@@ -34,7 +34,7 @@ end
 
 
 """
-Wald ratio for Mendelian Randomization with a single instrumentl variable
+Wald ratio for Mendelian Randomization with a single instrumental variable
 """
 function mr_wald(β_Y::Float64, 
                  se_β_Y::Float64, 
