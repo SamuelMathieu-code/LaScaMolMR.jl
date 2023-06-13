@@ -1,85 +1,87 @@
 using InMemoryDatasets
 using DLMReader
 using SnpArrays
-import Base.Threads.@threads
+using Base.Threads
+using Iterators
 
 
-"""
-Get correlation Matrix for specifies snps (tuple of the form (chr, pos) 
-    given reference genotype SnpData.
-"""
-function getLDmat(ref_genotypes::SnpData, 
-                  snps::AbstractVector{Tuple{Int8, Int}}
-                  )::Tuple{Matrix{Float64}, AbstractVector{Tuple{Int8, Int}}}
+    ########################
+    #       Constants      #
+    ########################
 
-    snps_indx = Vector{Int}(undef, size(snps, 1))
-    for (i, chr_pos_sing) in enumerate(snps)
-        local j = searchsortedfirst(ref_genotypes.snp_info.chr_pos, chr_pos_sing)
-        if ref_genotypes.snp_info.chr_pos[j] != chr_pos_sing
-            j = NaN
-        end
-        snps_indx[i] = j
-    end
-    kept_indx = snps_indx[.!(isnan.(snps_indx))]
+const mrNamesDict = Dict(mr_egger => "Egger",
+                   mr_ivw => "IVW",
+                   mr_wald => "Wald_ratio")
 
-    return mat_r²(ref_genotypes.snparray, kept_indx), .!(isnan.(snps_indx))
+macro NOut()
+    return :(11)
 end
 
-
-"""
-Implementation of the clumping algoritm prioritising first snps in given Vector
-    returns a vector of booean indication if each given snp is kept
-"""
-function clump(ref_genotypes::SnpData, 
-               snps::AbstractVector{Tuple{Int8, Int}}, 
-               r2_tresh::Float64 = 0.1
-               )::Vector{Bool}
-    
-    r2_mat, indx_v_b = getLDmat(ref_genotypes, snps)
-    idx_on_mat = accumulate(+, indx_v_b)
-    
-    for i in 1:(lastindex(snps)-1)
-        if indx_v_b[i]
-            for j in (i+1):lastindex(snps)
-                if r2_mat[idx_on_mat[i], idx_on_mat[j]] > r2_tresh
-                    indx_v_b[j] = false
-                end
-            end
-        end
-    end
-
-    return indx_v_b
-end
-
+    ########################
+    #       NaiveCis       #
+    ########################
 
 """
 Implmentation of naive approach for transcriptome wide MR
+    Returns a Dataset of results for each exposure (rows) and 
 """
 function NaiveCis(data::Dataset, GenotypesArr::AbstractVector{SnpData}, 
-                  one_file_per_chr_plink = true, 
+                  one_file_per_chr_plink = true,
                   r2_tresh::Float64 = 0.1,
-                  mr_methoods::AbstractVector{Function} = [mr_egger, mr_ivw]
+                  mr_methodsV::AbstractVector{Function} = [mr_egger, mr_ivw],
+                  α::Float64 = 0.05
                   )::Dataset
     
+    # Gestion of bedbimfam file sets
+    if !one_file_per_chr_plink && length(GenotypesArr) != 1
+        throw(ArgumentError("More than one bimbedfam set of files but not corresponding to chromosomes : expected"))
+    elseif one_file_per_chr_plink && (length(GenotypesArr) > 24 || length(GenotypesArr) < 22)
+        throw(ArgumentError("One bedbimfam file set per chromosome, expected between 22 and 24 file sets"))
+    end
+
+    # for outputs
+    outputArr = Array{mr_output}(undef, length(eachgroup(data)), @NOut * length(mr_methodsV))
+    exposureNamesV = Vector{String}(undef, length(eachgroup(data)))
+
     # MR pipeline for each exposure
-    @threads for data_group in eachgroup(data)
-        ivs_d = sort(data_group, :pval)
+    @threads for (i, data_group) in enumerate(eachgroup(data))
+        
+        ivs_d = sort(data_group, :pval_exp)
+
+        # !!!!!!!!!!!!!!!!!!!!!!!!
+        #  ADD HARMONISATION HERE   -> + filter for non biallelic/indels
+        # !!!!!!!!!!!!!!!!!!!!!!!!
+        
+        # if one plink fileset per chromosome, take file correponfing to exposure chromosome
         if one_file_per_chr_plink
             local chr = ivs_d.chr[0]
             kept_v_b = clump(GenotypesArr[chr], 
                              collect(zip(ivs_d.chr, ivs_d.pos)), 
                              r2_tresh)
-        else
+        else # else take first
             kept_v_b = clump(GenotypesArr[1], 
                              collect(zip(ivs_d.chr, ivs_d.pos)), 
                              r2_tresh)
         end
+
         ivs_d = ivs_d[kept_v_b, :]
+
         
         # make mr methods and write ouput in dataset
-        # ...
-
+        
+        for (j, mr_method) in enumerate(mr_methodsV)
+            if size(ivs_d, 1) >= 1
+                res = mr_method(ivs_d.β_out, ivs_d.se_out, ivs_d.β_exp, α)
+            else
+                res = mr_output(0, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN)
+            end
+            outputArr[i, (@NOut * (j - 1) + 1):(@NOut * j)] = [getproperty(res, field) for field in fieldnames(mr_output)] # badly optimized => think of a rapper of optmized version for users?
+        end
+        exposureNamesV[i] = data_group.trait[1]
     end
+    mr_names = [mrNamesDict[mr_methodsV[div(x, @NOut, RoundUp)]] for x in 1:(@NOut * length(mr_methodsV))]
+    fields = repeat(collect(string.(fieldnames(mr_output))), length(mr_methodsV))
+    header = ["exposure_name"; mr_names .* fields]
     
-    return Dataset()
+    return Dataset([exposureNamesV outputArr], header)
 end

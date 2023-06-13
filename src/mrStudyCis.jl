@@ -1,15 +1,15 @@
 using DLMReader
 using InMemoryDatasets
-import Base.Threads.@threads
+using Base.Threads
 using SnpArrays
 using Folds
-using Chain
+using Chain # unused
 
     ########################
     #       Constants      #
     ########################
 
-GenVarInfo_Types = Dict(TRAIT_NAME => String,
+const GenVarInfo_Types = Dict(TRAIT_NAME => String,
                         CHR => Int8,
                         POS => Int32,
                         A_EFFECT => String,
@@ -19,7 +19,7 @@ GenVarInfo_Types = Dict(TRAIT_NAME => String,
                         PVAL => Float64,
                         MINUS_LOG10_PVAL => Float64)
 
-GenVarInfo_Symbols_exp = Dict(TRAIT_NAME => :trait,
+const GenVarInfo_Symbols_exp = Dict(TRAIT_NAME => :trait,
                           CHR => :chr,
                           POS => :pos,
                           A_EFFECT => :a_effect_exp,
@@ -29,7 +29,7 @@ GenVarInfo_Symbols_exp = Dict(TRAIT_NAME => :trait,
                           PVAL => :pval_exp,
                           MINUS_LOG10_PVAL => :pval_exp)
 
-GenVarInfo_Symbols_out = Dict(TRAIT_NAME => :trait,
+const GenVarInfo_Symbols_out = Dict(TRAIT_NAME => :trait_out_,
                           CHR => :chr,
                           POS => :pos,
                           A_EFFECT => :a_effect_out,
@@ -133,6 +133,7 @@ function read_files(exposure::QTLStudy,
     ref_dict = Dict(zip(exposure.trait_v, zip(exposure.chr_v, exposure.tss_v)))
 
     # boolan tells if the variant is significant causal on exposure and if in window arround good tss
+    # equivalent to : good chr && in 500kb window && pval lower than threshold
     in_window(s::SubArray) = (s[1] == ref_dict[s[3]][1] && abs(s[2]-ref_dict[s[3]][2])≤window && s[4]<p_tresh)
     
     data_vect = Vector{Dataset}(undef, length(exposure))
@@ -155,7 +156,7 @@ function read_files(exposure::QTLStudy,
             end
 
             if !filtered
-                filter!(d, [:chr, :pos, :trait, :pval], 
+                filter!(d, [:chr, :pos, :trait, :pval_exp], 
                         type = in_window) # dataset filtered for window and significance
             end
             
@@ -208,7 +209,8 @@ function mrStudyCis(exposure::QTLStudy,
     window::Int = 500000, 
     r2_tresh::Float64 = 0.1,
     exposure_filtered = false,
-    mr_methods::AbstractVector{Function} = [mr_egger, mr_ivw]
+    mr_methods::AbstractVector{Function} = [mr_egger, mr_ivw],
+    α::Float64 = 0.05
     )::Dataset
     
     plink_files_load_tsk = @async global GenotypesArr = [SnpData(SnpArrays.datadir(file)) for file in bedbimfam_dirnames]
@@ -227,10 +229,10 @@ function mrStudyCis(exposure::QTLStudy,
                         makeunique=true, eolwarn=false)[:,collect(keys(outcome.columns))]
 
     #joined data
-    joined_d = innerjoin(gwas_d, qtl_d, on = [:chr, :pos], makeunique = true)
+    joined_d = innerjoin(gwas_d, qtl_d, on = [:chr, :pos], makeunique = false)
     groupby!(joined_d, :trait, stable = false)
 
-    # wait for lod plink files and sort them
+    # wait for loaded plink files and sort them
     wait(plink_files_load_tsk)
     @threads for i in 1:lastindex(GenotypesArr)
         GenotypesArr[i].snp_info.idx = collect(1:size(GenotypesArr[i].snp_info, 1))
@@ -245,7 +247,7 @@ function mrStudyCis(exposure::QTLStudy,
 
     #### for d in eachgroup(joined_d) -> Plink + MR (implement in NaiveCis)
     if approach == "naive"
-        return NaiveCis(joined_d, r2_tresh, GenotypesArr, one_file_per_chr_plink, mr_methods)
+        return NaiveCis(joined_d, r2_tresh, GenotypesArr, one_file_per_chr_plink, mr_methods, α)
     elseif approach == "test"
         return Dataset()
     end

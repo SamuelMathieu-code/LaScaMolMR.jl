@@ -1,6 +1,7 @@
-
 using Distributions
 using GLM
+
+
 ##################################################
 #                     MrPerf                     #
 ##################################################
@@ -24,23 +25,15 @@ struct mr_output
 end
 
 
-# """
-# Struct encasulating the outputs of Cochan's Q test
-# """
-# struct cochran_output
-#     Q::Float64
-#     p::Float64
-# end
-
-
 """
 Wald ratio for Mendelian Randomization with a single instrumental variable
+     y is outcome, x is exposure
 """
-function mr_wald(β_Y::Float64, 
-                 se_β_Y::Float64, 
-                 β_X::Float64,  
+function mr_wald(β_y, 
+                 se_β_y, 
+                 β_x,  
                  α::Float64 = 0.05)::mr_output  # À véerifier que la distribustion normale convient!!!!!!!!
-    
+    β_Y, β_X, se_β_Y = β_y[1], β_x[1], se_β_y[1]
     θ = β_Y / β_X
     se_θ = se_β_Y / abs(β_X)
     dh = Normal(0, se_θ)
@@ -54,10 +47,11 @@ end
 
 """
 Inverse variance weighted linear regression with simple weights (se(B_Y)^-2) Mendelian Randomization
+    Y is outcome, X is exposure
 """
-function mr_ivw(β_Y::Vector{Float64}, 
-                se_β_Y::Vector{Float64}, 
-                β_X::Vector{Float64}, 
+function mr_ivw(β_Y::AbstractVector{Float64}, 
+                se_β_Y::AbstractVector{Float64}, 
+                β_X::AbstractVector{Float64}, 
                 α::Float64 = 0.05)::mr_output 
 
     # regression
@@ -98,10 +92,11 @@ end
 
 """
 Egger Mendelian Randomization
+    Y is outcome, X is exposure
 """
-function mr_egger(β_Y::Vector{Float64}, 
-                  se_β_Y::Vector{Float64}, 
-                  β_X::Vector{Float64}, 
+function mr_egger(β_Y::AbstractVector{Float64}, 
+                  se_β_Y::AbstractVector{Float64}, 
+                  β_X::AbstractVector{Float64}, 
                   α::Float64 = 0.05)::mr_output
     
     # regression
@@ -135,14 +130,3 @@ function mr_egger(β_Y::Vector{Float64},
 
 end
 
-
-# """
-# Cochran's Q test for heterogeneity
-# """
-# function cochran(β_Y::Vector{Float64}, 
-#                  se_β_Y::Vector{Float64}, 
-#                  β_X::Vector{Float64}, 
-#                  α::Float64 = 0.05)::cochran_output 
-
-#     return cochran_output()
-# end
