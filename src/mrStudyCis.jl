@@ -246,19 +246,14 @@ function mrStudyCis(exposure::QTLStudy,
     biallelic(s::SubArray) = (s[1]==s[2] && s[3] == s[4]) || (s[1] == s[4] && s[2] == s[3])
     joined_d = @chain qtl_d begin
         innerjoin(gwas_d, on = [:chr, :pos], makeunique = false)
-        filter([:a_effect_exp, :a_effect_out, :a_other_exp, :a_other_out], type = biallelic)
+        filter([:a_effect_exp, :a_effect_out, :a_other_exp, :a_other_out], type = biallelic) # filter for "obvious" non biallelic variants
         groupby(:trait, stable = false)
     end
 
-    # wait for loaded plink files and sort them
+    # wait for loaded plink files and format them
     wait(plink_files_load_tsk)
     @threads for i in 1:lastindex(GenotypesArr)
-        GenotypesArr[i].snp_info.idx = collect(1:size(GenotypesArr[i].snp_info, 1))
-        GenotypesArr[i].snp_info.chr_pos = collect(
-            zip(parse.(Int8, GenotypesArr[i].snp_info.chromosome), 
-            GenotypesArr[i].snp_info.position)
-        )
-        sort!(GenotypesArr[i].snp_info, :chr_pos)
+        formatSnpData!(GenotypesArr[i])
     end
 
     one_file_per_chr_plink = length(bedbimfam_dirnames) > 1

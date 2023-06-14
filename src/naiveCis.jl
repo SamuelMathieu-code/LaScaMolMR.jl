@@ -45,9 +45,9 @@ function NaiveCis(data::Dataset, GenotypesArr::AbstractVector{SnpData},
         ivs_d = sort(data_group, :pval_exp)
         
         # if one plink fileset per chromosome, take file correponfing to exposure chromosome
+        # How could we optimize this if else statement?
         if one_file_per_chr_plink
-            local chr = ivs_d.chr[0]
-            kept_v_b = clump(GenotypesArr[chr], 
+            kept_v_b = clump(GenotypesArr[ivs_d.chr[0]], 
                              collect(zip(ivs_d.chr, ivs_d.pos)), 
                              r2_tresh)
         else # else take first
@@ -58,11 +58,15 @@ function NaiveCis(data::Dataset, GenotypesArr::AbstractVector{SnpData},
 
         ivs_d = ivs_d[kept_v_b, :]
 
-        # harmonisation
-        
+        # harmonisation -----------> Would it be better to to the harmonisation at the same time as biallelic filtering (in mrStudyCis)? If so : how?
+        for row in axes(ivs_d, 1) # could be more efficient? If so : how?
+            if ivs_d[row, :a_effect_exp] != ivs_d[row, :a_effect_out]
+                ivs_d[row, :β_out] = - ivs_d[row, :β_out]
+                ivs_d[row, :a_effect_out], ivs_d[row, :a_other_out] = ivs_d[row, :a_other_out], ivs_d[row, :a_effect_out]
+            end
+        end
         
         # make mr methods and write ouput in dataset
-        
         for (j, mr_method) in enumerate(mr_methodsV)
             if size(ivs_d, 1) >= 1
                 res = mr_method(ivs_d.β_out, ivs_d.se_out, ivs_d.β_exp, α)

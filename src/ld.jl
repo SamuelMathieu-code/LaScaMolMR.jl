@@ -127,7 +127,7 @@ end
 
 
 """
-Implementation of the clumping algoritm prioritising first snps in given Vector
+Implementation of the clumping algoritm prioritising first snps in given Vector and formated Genotypes SnpData (see formatSnpData!)
     returns a vector of booean indication if each given snp is kept
 """
 function clump(ref_genotypes::SnpData, 
@@ -149,5 +149,20 @@ function clump(ref_genotypes::SnpData,
     end
 
     return indx_v_b
+end
+
+
+"""
+format Genotype information contained in SnpData for optimised snp search based on chromosome position.
+Adds a column of tuple (chr::Int8, pos::Int) in snp_info and sorts snp_info accordingly.
+    returns nothing
+"""
+function formatSnpData!(Genotypes::SnpData)
+    Genotypes.snp_info.idx = collect(1:size(Genotypes.snp_info, 1))
+    Genotypes.snp_info.chr_pos = collect(
+            zip(parse.(Int8, Genotypes.snp_info.chromosome), 
+                Genotypes.snp_info.position)
+        )
+    sort!(Genotypes.snp_info, :chr_pos)
 end
 
