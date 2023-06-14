@@ -39,3 +39,15 @@ enventualities
 - TransMR : trans selection of ivs
 - ReverseMR : Reverse causality investigation
 - PlotsMR : Graphical illustration of the results of an MR study
+
+## TODO
+
+- [ ] Implement & test NaiveCis.jl
+    - [ ] Write unit test NaiveCis.jl
+- [ ] Implement & test ld.jl
+    - [x] test with real data in notebook and compare results with plink clumping
+    - [ ] Write unit ld.jl
+- [ ] Implement & test mrStudyCis.jl
+    - [x] Implement harmonisation & indels removal
+    - [ ] test with real data in notebook
+    - [ ] Write unit test mrStudyCis.jl

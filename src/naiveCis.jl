@@ -2,7 +2,6 @@ using InMemoryDatasets
 using DLMReader
 using SnpArrays
 using Base.Threads
-using Iterators
 
 
     ########################
@@ -12,10 +11,7 @@ using Iterators
 const mrNamesDict = Dict(mr_egger => "Egger",
                    mr_ivw => "IVW",
                    mr_wald => "Wald_ratio")
-
-macro NOut()
-    return :(11)
-end
+const NOut = 11
 
     ########################
     #       NaiveCis       #
@@ -40,17 +36,13 @@ function NaiveCis(data::Dataset, GenotypesArr::AbstractVector{SnpData},
     end
 
     # for outputs
-    outputArr = Array{mr_output}(undef, length(eachgroup(data)), @NOut * length(mr_methodsV))
+    outputArr = Array{mr_output}(undef, length(eachgroup(data)), NOut * length(mr_methodsV))
     exposureNamesV = Vector{String}(undef, length(eachgroup(data)))
 
     # MR pipeline for each exposure
     @threads for (i, data_group) in enumerate(eachgroup(data))
         
         ivs_d = sort(data_group, :pval_exp)
-
-        # !!!!!!!!!!!!!!!!!!!!!!!!
-        #  ADD HARMONISATION HERE   -> + filter for non biallelic/indels
-        # !!!!!!!!!!!!!!!!!!!!!!!!
         
         # if one plink fileset per chromosome, take file correponfing to exposure chromosome
         if one_file_per_chr_plink
@@ -66,6 +58,8 @@ function NaiveCis(data::Dataset, GenotypesArr::AbstractVector{SnpData},
 
         ivs_d = ivs_d[kept_v_b, :]
 
+        # harmonisation
+        
         
         # make mr methods and write ouput in dataset
         
@@ -75,11 +69,11 @@ function NaiveCis(data::Dataset, GenotypesArr::AbstractVector{SnpData},
             else
                 res = mr_output(0, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN)
             end
-            outputArr[i, (@NOut * (j - 1) + 1):(@NOut * j)] = [getproperty(res, field) for field in fieldnames(mr_output)] # badly optimized => think of a rapper of optmized version for users?
+            outputArr[i, (NOut * (j - 1) + 1):(NOut * j)] = [getproperty(res, field) for field in fieldnames(mr_output)] # badly optimized => think of a rapper of optmized version for users?
         end
         exposureNamesV[i] = data_group.trait[1]
     end
-    mr_names = [mrNamesDict[mr_methodsV[div(x, @NOut, RoundUp)]] for x in 1:(@NOut * length(mr_methodsV))]
+    mr_names = [mrNamesDict[mr_methodsV[div(x, NOut, RoundUp)]] for x in 1:(NOut * length(mr_methodsV))]
     fields = repeat(collect(string.(fieldnames(mr_output))), length(mr_methodsV))
     header = ["exposure_name"; mr_names .* fields]
     

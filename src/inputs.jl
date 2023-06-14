@@ -21,7 +21,7 @@ end
     BETA
     SE
     PVAL
-    MINUS_LOG10_PVAL
+    LOG_PVAL
 end
 
 @exportinstances GenVarInfo

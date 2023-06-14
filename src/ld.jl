@@ -89,7 +89,7 @@ end
 
 
 """
-LD r² composite matrix of n SNPs
+LD r² composite matrix of n SNPs from index in SnpArray
 """
 function mat_r²(arr::SnpArray, idx::AbstractVector{Int})::Matrix{Float64}
     M_corr = Matrix{Float64}(I, length(idx), length(idx))

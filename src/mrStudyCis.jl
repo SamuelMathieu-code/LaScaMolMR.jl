@@ -17,7 +17,7 @@ const GenVarInfo_Types = Dict(TRAIT_NAME => String,
                         BETA => Float64,
                         SE => Float64,
                         PVAL => Float64,
-                        MINUS_LOG10_PVAL => Float64)
+                        LOG_PVAL => Float64)
 
 const GenVarInfo_Symbols_exp = Dict(TRAIT_NAME => :trait,
                           CHR => :chr,
@@ -27,7 +27,7 @@ const GenVarInfo_Symbols_exp = Dict(TRAIT_NAME => :trait,
                           BETA => :β_exp,
                           SE => :se_exp,
                           PVAL => :pval_exp,
-                          MINUS_LOG10_PVAL => :pval_exp)
+                          LOG_PVAL => :pval_exp)
 
 const GenVarInfo_Symbols_out = Dict(TRAIT_NAME => :trait_out_,
                           CHR => :chr,
@@ -37,7 +37,7 @@ const GenVarInfo_Symbols_out = Dict(TRAIT_NAME => :trait_out_,
                           BETA => :β_out,
                           SE => :se_out,
                           PVAL => :pval_out,
-                          MINUS_LOG10_PVAL => :pval_out)
+                          LOG_PVAL => :pval_out)
 
 
     ########################
@@ -100,13 +100,13 @@ function verify_and_simplify_columns(exposure::Union{QTLStudy, GWAS})::Int
             cols_ok[PVAL] = true
             new_cols_exposure[key] = PVAL
             col_log_pval = -1
-        elseif cols_ok[PVAL] == false && exposure.columns[key] == MINUS_LOG10_PVAL
+        elseif cols_ok[PVAL] == false && exposure.columns[key] == LOG_PVAL
             col_log_pval = key
         end
     end
 
     if col_log_pval != -1
-        new_cols_exposure[MINUS_LOG10_PVAL] = col_log_pval
+        new_cols_exposure[LOG_PVAL] = col_log_pval
         cols_ok[PVAL] = true
     end
 
@@ -121,20 +121,25 @@ function verify_and_simplify_columns(exposure::Union{QTLStudy, GWAS})::Int
 end
 
 
-function read_files(exposure::QTLStudy, 
+function read_qtl_files(exposure::QTLStudy, 
     col_log_pval::Int, 
     types::Dict{Int, DataType}, 
     header::Vector{Symbol},
     window::Int,
     p_tresh::Float64,
-    filtered::Bool =false)::Dataset
+    filtered::Bool =false,
+    trsf_log_pval::Function = x -> exp10.(x))::Dataset
 
     # Dicionary of trait -- tss
     ref_dict = Dict(zip(exposure.trait_v, zip(exposure.chr_v, exposure.tss_v)))
 
     # boolan tells if the variant is significant causal on exposure and if in window arround good tss
     # equivalent to : good chr && in 500kb window && pval lower than threshold
-    in_window(s::SubArray) = (s[1] == ref_dict[s[3]][1] && abs(s[2]-ref_dict[s[3]][2])≤window && s[4]<p_tresh)
+    in_window(s::SubArray) = (
+                              s[1] == ref_dict[s[3]][1] && # good chr
+                              abs(s[2]-ref_dict[s[3]][2])≤window && # in window
+                              s[4]<p_tresh # p_thresh significant
+                            )
     
     data_vect = Vector{Dataset}(undef, length(exposure))
 
@@ -152,12 +157,16 @@ function read_files(exposure::QTLStudy,
             end
             
             if col_log_pval != -1
-                modify!(d, :pval => x -> exp10.(-x))
+                modify!(d, :pval => trsf_log_pval)
             end
 
             if !filtered
-                filter!(d, [:chr, :pos, :trait, :pval_exp], 
+                d = @chain d  begin 
+                    filter([:chr, :pos, :trait, :pval_exp], 
                         type = in_window) # dataset filtered for window and significance
+                    filter(:a_effect_exp, type = x -> length(x) == 1) # remove indels
+                    filter(:a_other_exp, type = x -> length(x) == 1)  # remove indels
+                end
             end
             
             data_vect[i] = d
@@ -175,12 +184,18 @@ function read_files(exposure::QTLStudy,
             end
             
             if col_log_pval != -1
-                modify!(d, :pval => x -> exp10.(-x), threads = false)
+                modify!(d, :pval => trsf_log_pval, threads = false)
             end
 
             if !filtered
-                filter!(d, [:chr, :pos, :trait, :pval], 
+                d = @chain d  begin 
+                    filter([:chr, :pos, :trait, :pval_exp], 
                         type = in_window, threads = false) # dataset filtered for window and significance
+                    filter(:a_effect_exp, type = x -> length(x) == 1,  # remove indels
+                        threads = false)
+                    filter(:a_other_exp, type = x -> length(x) == 1,  # remove indels
+                        threads = false)
+                end
             end
             
             data_vect[i] = d
@@ -218,7 +233,7 @@ function mrStudyCis(exposure::QTLStudy,
     #qtl_data
     col_log_pval = verify_and_simplify_columns(exposure)
     types, header = make_types_and_headers(exposure)
-    qtl_d = read_files(exposure, col_log_pval, types, header, window, p_tresh, exposure_filtered)
+    qtl_d = read_qtl_files(exposure, col_log_pval, types, header, window, p_tresh, exposure_filtered)
     
     #gwas_data
     col_log_pval = verify_and_simplify_columns(outcome)
@@ -228,9 +243,12 @@ function mrStudyCis(exposure::QTLStudy,
                         header = header, types = types, skipto=2, 
                         makeunique=true, eolwarn=false)[:,collect(keys(outcome.columns))]
 
-    #joined data
-    joined_d = innerjoin(gwas_d, qtl_d, on = [:chr, :pos], makeunique = false)
-    groupby!(joined_d, :trait, stable = false)
+    biallelic(s::SubArray) = (s[1]==s[2] && s[3] == s[4]) || (s[1] == s[4] && s[2] == s[3])
+    joined_d = @chain qtl_d begin
+        innerjoin(gwas_d, on = [:chr, :pos], makeunique = false)
+        filter([:a_effect_exp, :a_effect_out, :a_other_exp, :a_other_out], type = biallelic)
+        groupby(:trait, stable = false)
+    end
 
     # wait for loaded plink files and sort them
     wait(plink_files_load_tsk)
@@ -249,6 +267,12 @@ function mrStudyCis(exposure::QTLStudy,
     if approach == "naive"
         return NaiveCis(joined_d, r2_tresh, GenotypesArr, one_file_per_chr_plink, mr_methods, α)
     elseif approach == "test"
+        return joined_d
+    elseif approach == "strict"
         return Dataset()
+    elseif approach == "2ndChance"
+        return Dataset()
+    else
+        throw(ArgumentError("approach should be either \"naive\", \"test\", \"strict\" or \"2ndChance\""))
     end
 end
