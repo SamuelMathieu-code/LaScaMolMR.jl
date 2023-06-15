@@ -1,5 +1,5 @@
 using SnpArrays
-using IterTools
+import IterTools.subsets
 using LinearAlgebra
 
 ########## Genotypes in Plink .bed format #########

@@ -21,13 +21,13 @@ const NOut = 11
 Implmentation of naive approach for transcriptome wide MR
     Returns a Dataset of results for each exposure (rows) and 
 """
-function NaiveCis(data::Dataset, GenotypesArr::AbstractVector{SnpData}, 
+function NaiveCis(data::GroupBy, GenotypesArr::AbstractVector{SnpData}; 
                   one_file_per_chr_plink = true,
                   r2_tresh::Float64 = 0.1,
                   mr_methodsV::AbstractVector{Function} = [mr_egger, mr_ivw],
                   α::Float64 = 0.05
                   )::Dataset
-    
+
     # Gestion of bedbimfam file sets
     if !one_file_per_chr_plink && length(GenotypesArr) != 1
         throw(ArgumentError("More than one bimbedfam set of files but not corresponding to chromosomes : expected"))
@@ -36,18 +36,18 @@ function NaiveCis(data::Dataset, GenotypesArr::AbstractVector{SnpData},
     end
 
     # for outputs
-    outputArr = Array{mr_output}(undef, length(eachgroup(data)), NOut * length(mr_methodsV))
+    outputArr = Array{Float64}(undef, length(eachgroup(data)), NOut * length(mr_methodsV))
     exposureNamesV = Vector{String}(undef, length(eachgroup(data)))
 
     # MR pipeline for each exposure
-    @threads for (i, data_group) in enumerate(eachgroup(data))
+    @threads for (i, data_group) in collect(enumerate(eachgroup(data)))
         
         ivs_d = sort(data_group, :pval_exp)
         
         # if one plink fileset per chromosome, take file correponfing to exposure chromosome
         # How could we optimize this if else statement?
         if one_file_per_chr_plink
-            kept_v_b = clump(GenotypesArr[ivs_d.chr[0]], 
+            kept_v_b = clump(GenotypesArr[ivs_d.chr[1]], 
                              collect(zip(ivs_d.chr, ivs_d.pos)), 
                              r2_tresh)
         else # else take first
@@ -69,7 +69,7 @@ function NaiveCis(data::Dataset, GenotypesArr::AbstractVector{SnpData},
         # make mr methods and write ouput in dataset
         for (j, mr_method) in enumerate(mr_methodsV)
             if size(ivs_d, 1) >= 1
-                res = mr_method(ivs_d.β_out, ivs_d.se_out, ivs_d.β_exp, α)
+                res = mr_method(Vector{Float64}(ivs_d.β_out.val), Vector{Float64}(ivs_d.se_out.val), Vector{Float64}(ivs_d.β_exp.val), α)
             else
                 res = mr_output(0, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN)
             end

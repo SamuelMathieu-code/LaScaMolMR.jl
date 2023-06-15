@@ -68,12 +68,17 @@ function make_types_and_headers(file::Union{QTLStudy, GWAS})::Tuple{Dict{Int, Da
 end
 
 
-function verify_and_simplify_columns(exposure::Union{QTLStudy, GWAS})::Int
+function verify_and_simplify_columns(exposure::Union{QTLStudy, GWAS})::Bool
 
-    trait_each_path_nothing =  nothing in exposure.traits_for_each_path
-    if trait_each_path_nothing && !(TRAIT_NAME in values(exposure.columns))
-        throw(ArgumentError("exposure misses TRAIT_NAME information"))
+    if exposure isa QTLStudy
+        trait_each_path_nothing =  nothing in exposure.traits_for_each_path
+        if trait_each_path_nothing && !(TRAIT_NAME in values(exposure.columns))
+            throw(ArgumentError("exposure misses TRAIT_NAME information"))
+        end
+    else
+        trait_each_path_nothing = false
     end
+
 
     # Treating exposure
     # keep only columns and verify all columns are satisfied       ----> cette section pourrait être optimisée? Encapsuler dans une foncion!
@@ -116,13 +121,13 @@ function verify_and_simplify_columns(exposure::Union{QTLStudy, GWAS})::Int
         end
     end
     exposure.columns = new_cols_exposure
-    return col_log_pval
+    return col_log_pval != -1
 
 end
 
 
 function read_qtl_files(exposure::QTLStudy, 
-    col_log_pval::Int, 
+    col_log_pval::Bool, 
     types::Dict{Int, DataType}, 
     header::Vector{Symbol},
     window::Int,
@@ -156,7 +161,7 @@ function read_qtl_files(exposure::QTLStudy,
                 d.trait = repeat([file.trait_name], nrow(d))
             end
             
-            if col_log_pval != -1
+            if col_log_pval
                 modify!(d, :pval => trsf_log_pval)
             end
 
@@ -169,6 +174,8 @@ function read_qtl_files(exposure::QTLStudy,
                 end
             end
             
+            modify!(d, [:a_effect_exp, :a_other_exp] => x -> lowercase.(x))
+
             data_vect[i] = d
         end
     else                                        ### Case when more files than threads -> read multiple files in //
@@ -183,7 +190,7 @@ function read_qtl_files(exposure::QTLStudy,
                 d.trait = repeat([file.trait_name], nrow(d))
             end
             
-            if col_log_pval != -1
+            if col_log_pval
                 modify!(d, :pval => trsf_log_pval, threads = false)
             end
 
@@ -197,6 +204,8 @@ function read_qtl_files(exposure::QTLStudy,
                         threads = false)
                 end
             end
+
+            modify!(d, [:a_effect_exp, :a_other_exp] => x -> lowercase.(x), threads = false)
             
             data_vect[i] = d
         end
@@ -218,22 +227,24 @@ Perform a Mendelian Randomization study with exposure QTL and outcome GWAS
 """
 function mrStudyCis(exposure::QTLStudy, 
     outcome::GWAS, 
-    bedbimfam_dirnames::AbstractArray{String},
+    bedbimfam_dirnames::AbstractArray{String};
     approach::String="naive", 
-    p_tresh::Float64 = 5e-3, 
+    p_tresh::Float64 = 1e-3, 
     window::Int = 500000, 
     r2_tresh::Float64 = 0.1,
     exposure_filtered = false,
     mr_methods::AbstractVector{Function} = [mr_egger, mr_ivw],
-    α::Float64 = 0.05
-    )::Dataset
+    α::Float64 = 0.05,
+    trsf_log_pval_exp::Function = x -> exp10.(x),
+    trsf_log_pval_out::Function = x -> exp10.(x)
+    )::Union{Dataset, GroupBy}
     
-    plink_files_load_tsk = @async global GenotypesArr = [SnpData(SnpArrays.datadir(file)) for file in bedbimfam_dirnames]
+    # plink_files_load_tsk = @async global GenotypesArr = [SnpData(SnpArrays.datadir(file)) for file in bedbimfam_dirnames]
 
     #qtl_data
     col_log_pval = verify_and_simplify_columns(exposure)
     types, header = make_types_and_headers(exposure)
-    qtl_d = read_qtl_files(exposure, col_log_pval, types, header, window, p_tresh, exposure_filtered)
+    qtl_d = read_qtl_files(exposure, col_log_pval, types, header, window, p_tresh, exposure_filtered, trsf_log_pval_exp)
     
     #gwas_data
     col_log_pval = verify_and_simplify_columns(outcome)
@@ -242,16 +253,22 @@ function mrStudyCis(exposure::QTLStudy,
                         delimiter = outcome.separator, 
                         header = header, types = types, skipto=2, 
                         makeunique=true, eolwarn=false)[:,collect(keys(outcome.columns))]
+    if col_log_pval
+        modify!(gwas_d, :pval => trsf_log_pval_out)
+    end
+    modify!(gwas_d, [:a_effect_out, :a_other_out] => x -> lowercase.(x))
 
     biallelic(s::SubArray) = (s[1]==s[2] && s[3] == s[4]) || (s[1] == s[4] && s[2] == s[3])
     joined_d = @chain qtl_d begin
         innerjoin(gwas_d, on = [:chr, :pos], makeunique = false)
         filter([:a_effect_exp, :a_effect_out, :a_other_exp, :a_other_out], type = biallelic) # filter for "obvious" non biallelic variants
+        filter(:, by = !ismissing)
         groupby(:trait, stable = false)
     end
 
     # wait for loaded plink files and format them
-    wait(plink_files_load_tsk)
+    # wait(plink_files_load_tsk)
+    GenotypesArr = [SnpData(SnpArrays.datadir(file)) for file in bedbimfam_dirnames]
     @threads for i in 1:lastindex(GenotypesArr)
         formatSnpData!(GenotypesArr[i])
     end

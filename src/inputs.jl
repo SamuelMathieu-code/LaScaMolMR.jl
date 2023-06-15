@@ -35,34 +35,34 @@ promote_rule(::Type{S}, ::Type{T}) where {S <: QtlPathPattern, T <: QtlPathPatte
 #                      Inputs                     #
 ###################################################
 
-struct GWAS
+mutable struct GWAS{T <: Integer}
     path::String
-    columns::Union{Dict{Int, Any}, Dict{Int, GenVarInfo}}
-    separator::Union{Char, AbstractVector{Char}}
-    trait_name::Union{Nothing, String}  # When searching pot ivs --> check trait_name id ok with ouput of GWAS.acc_func <=> GWAS.trait_name !== nothing
+    columns::Union{Dict{T, GenVarInfo}}
+    separator::Union{Char, Vector{Char}}
+    trait_name::Union{Nothing, String} 
 end
 
-GWAS(path::String,
-     columns::Union{Dict{Int, Any}, Dict{Int, GenVarInfo}},
-     separator::Union{Char, AbstractVector{Char}}) = GWAS(path, columns, separator, nothing)
+GWAS(path,
+     columns,
+     separator) = GWAS(path, columns, separator, nothing)
 
 
-mutable struct QTLStudy      # Change to see it directly as a collection of gwas??
-    path_v::AbstractVector{String}
-    traits_for_each_path::AbstractVector{Any}
-    trait_v
-    chr_v
-    tss_v
-    columns::Union{Dict{Int, Any}, Dict{Int, GenVarInfo}}
-    separator::Union{Char, AbstractVector{Char}}
+mutable struct QTLStudy{I <: Union{Missing, Integer}, I2 <: Integer, S <: Union{Missing, AbstractString}, VSN <: Union{Vector{String}, Vector{Nothing}}}
+    path_v::Vector{S}
+    traits_for_each_path::VSN
+    trait_v::Vector{S}
+    chr_v::Vector{I}
+    tss_v::Vector{I}
+    columns::Union{Dict{I2, GenVarInfo}}
+    separator::Union{Char, Vector{Char}}
 end
 
-QTLStudy(path_v::AbstractVector{String},
+QTLStudy(path_v::Vector,
     trait_v,
     chr_v,
     tss_v,
-    columns::Union{Dict{Int, Any}, Dict{Int, GenVarInfo}},
-    separator::Union{Char, AbstractVector{Char}}) = QTLStudy(path_v, repeat([nothing], length(path_v)), trait_v, chr_v, tss_v, columns, separator)
+    columns,
+    separator) = QTLStudy(path_v, repeat([nothing], length(path_v)), trait_v, chr_v, tss_v, columns, separator)
 
 QTLStudy(path::String,
     trait_v::Union{AbstractVector{String}, DatasetColumn{Dataset, Vector{Union{Missing, String}}}},
@@ -73,7 +73,7 @@ QTLStudy(path::String,
 
 
 function QTLStudy_from_pattern(folder::String,
-    path_pattern::AbstractVector{Any}, 
+    path_pattern::Vector, 
     trait_v, 
     chr_v, 
     tss_v, 

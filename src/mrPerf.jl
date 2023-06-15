@@ -29,11 +29,10 @@ end
 Wald ratio for Mendelian Randomization with a single instrumental variable
      y is outcome, x is exposure
 """
-function mr_wald(β_y, 
-                 se_β_y, 
-                 β_x,  
+function mr_wald(β_Y::Float64, 
+                 se_β_Y::Float64, 
+                 β_X::Float64,  
                  α::Float64 = 0.05)::mr_output  # À véerifier que la distribustion normale convient!!!!!!!!
-    β_Y, β_X, se_β_Y = β_y[1], β_x[1], se_β_y[1]
     θ = β_Y / β_X
     se_θ = se_β_Y / abs(β_X)
     dh = Normal(0, se_θ)
@@ -44,14 +43,21 @@ function mr_wald(β_y,
     return mr_output(1, θ, ci_low, ci_high, p, NaN, NaN, NaN, NaN, NaN, NaN)
 end
 
+function mr_wald(β_y::Vector{Float64}, 
+                 se_β_y::Vector{Float64}, 
+                 β_x::Vector{Float64},  
+                 α::Float64 = 0.05)::mr_output
+    return mr_wald(β_y[1], se_β_y[1], β_x[1], α)
+end
+
 
 """
 Inverse variance weighted linear regression with simple weights (se(B_Y)^-2) Mendelian Randomization
     Y is outcome, X is exposure
 """
-function mr_ivw(β_Y::AbstractVector{Float64}, 
-                se_β_Y::AbstractVector{Float64}, 
-                β_X::AbstractVector{Float64}, 
+function mr_ivw(β_Y::Vector{Float64}, 
+                se_β_Y::Vector{Float64}, 
+                β_X::Vector{Float64}, 
                 α::Float64 = 0.05)::mr_output 
 
     # regression
@@ -94,9 +100,9 @@ end
 Egger Mendelian Randomization
     Y is outcome, X is exposure
 """
-function mr_egger(β_Y::AbstractVector{Float64}, 
-                  se_β_Y::AbstractVector{Float64}, 
-                  β_X::AbstractVector{Float64}, 
+function mr_egger(β_Y::Vector{Float64}, 
+                  se_β_Y::Vector{Float64}, 
+                  β_X::Vector{Float64}, 
                   α::Float64 = 0.05)::mr_output
     
     # regression

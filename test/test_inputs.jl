@@ -34,7 +34,7 @@ end
     trait_v = ["A", "C"]
     chr_v = [1, 3]
     tss_v = [398576, 9874365]
-    columns = Dict(1=>TRAIT_NAME, 2=>"etc...")
+    columns = Dict(1=>TRAIT_NAME, 2=>PVAL)
     sep = ' '
     qtl = QTLStudy("my/file", trait_v, chr_v, tss_v, columns, sep)
     @test qtl.traits_for_each_path == [nothing]
@@ -46,7 +46,7 @@ end
     trait_v = ["A", "C"]
     chr_v = [1, 3]
     tss_v = [398576, 9874365]
-    columns = Dict(1=>TRAIT_NAME, 2=>"etc...")
+    columns = Dict(1=>TRAIT_NAME, 2=>PVAL)
     sep = ' '
 
     qtl = QTLStudy_from_pattern(folder, pattern, trait_v, chr_v, tss_v, columns, sep, true)
@@ -63,7 +63,7 @@ end
     trait_v = ["A", "C"]
     chr_v = [1, 3]
     tss_v = [398576, 9874365]
-    columns = Dict(1=>TRAIT_NAME, 2=>"etc...")
+    columns = Dict(1=>TRAIT_NAME, 2=>PVAL)
     sep = ' '
 
     qtl = QTLStudy_from_pattern(folder, pattern, trait_v, chr_v, tss_v, columns, sep, false)
@@ -80,7 +80,7 @@ end
     trait_v = ["A", "C"]
     chr_v = [1, 3]
     tss_v = [398576, 9874365]
-    columns = Dict(1=>TRAIT_NAME, 2=>"etc...")
+    columns = Dict(1=>TRAIT_NAME, 2=>PVAL)
     sep = ' '
 
     qtl = QTLStudy_from_pattern(folder, file_pat, trait_v, chr_v, tss_v, columns, ' ', false)
