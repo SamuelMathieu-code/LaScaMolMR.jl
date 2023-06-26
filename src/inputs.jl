@@ -47,13 +47,13 @@ GWAS(path,
      separator) = GWAS(path, columns, separator, nothing)
 
 
-mutable struct QTLStudy{I <: Union{Missing, Integer}, I2 <: Integer, S <: Union{Missing, AbstractString}, VSN <: Union{Vector{String}, Vector{Nothing}}}
-    path_v::Vector{S}
-    traits_for_each_path::VSN
-    trait_v::Vector{S}
-    chr_v::Vector{I}
-    tss_v::Vector{I}
-    columns::Union{Dict{I2, GenVarInfo}}
+mutable struct QTLStudy
+    path_v::Vector{S1} where S1 <: Union{Missing, AbstractString}
+    traits_for_each_path::Vector{SN} where SN <: Union{String, Missing, Nothing}
+    trait_v::Vector{S2} where S2 <: Union{Missing, AbstractString}
+    chr_v::Vector{I1} where I1 <: Union{Missing, Integer}
+    tss_v::Vector{I2} where I2 <: Union{Missing, Integer}
+    columns::Union{Dict{I3, GenVarInfo}} where I3 <: Integer
     separator::Union{Char, Vector{Char}}
 end
 
@@ -79,7 +79,7 @@ function QTLStudy_from_pattern(folder::String,
     tss_v, 
     columns::Union{Dict{Int, Any}, Dict{Int, GenVarInfo}}, 
     separator::Union{Char, AbstractVector{Char}},
-    only_corresp_chr::Bool = true)::QTLStudy
+    only_corresp_chr::Bool = true)::QTLStudy                 ########### only_corresp_chr not used! (always treated as true)
 
     if path_pattern[1] isa String && startswith(path_pattern[1], Base.Filesystem.path_separator)
         @warn "The first element of path_pattern starts with the path separator. Paths separators are not necessary in this place. It will be removed"

@@ -1,6 +1,7 @@
 using SnpArrays
 import IterTools.subsets
 using LinearAlgebra
+using Base.Threads
 
 ########## Genotypes in Plink .bed format #########
 
@@ -95,7 +96,31 @@ function mat_r²(arr::SnpArray, idx::AbstractVector{Int})::Matrix{Float64}
     M_corr = Matrix{Float64}(I, length(idx), length(idx))
     
     d = Dict(zip(idx, 1:lastindex(idx)))
+    @threads for (i, j) in collect(subsets(idx, 2))
+        snp1 = arr[:,i]
+        snp2 = arr[:,j]
+        M_corr[d[i], d[j]] = M_corr[d[j], d[i]] = ld_r²(snp1, snp2) #function implemented following paper pmid :18757931, for r² type r\^2
+    end
+    return M_corr
+end
+
+function mat_r²_2(arr::SnpArray, idx::AbstractVector{Int})::Matrix{Float64}
+    M_corr = Matrix{Float64}(I, length(idx), length(idx))
+    
+    d = Dict(zip(idx, 1:lastindex(idx)))
     for (i, j) in subsets(idx, 2)
+        snp1 = arr[:,i]
+        snp2 = arr[:,j]
+        M_corr[d[i], d[j]] = M_corr[d[j], d[i]] = ld_r²(snp1, snp2) #function implemented following paper pmid :18757931, for r² type r\^2
+    end
+    return M_corr
+end
+
+function mat_r²_3(arr::SnpArray, idx::AbstractVector{Int})::Matrix{Float64}
+    M_corr = Matrix{Float64}(I, length(idx), length(idx))
+    
+    d = Dict(zip(idx, 1:lastindex(idx)))
+    @threads :static for (i, j) in collect(subsets(idx, 2))
         snp1 = arr[:,i]
         snp2 = arr[:,j]
         M_corr[d[i], d[j]] = M_corr[d[j], d[i]] = ld_r²(snp1, snp2) #function implemented following paper pmid :18757931, for r² type r\^2
@@ -113,9 +138,9 @@ function getLDmat(ref_genotypes::SnpData,
                   )::Tuple{Matrix{Float64}, Vector{Bool}}
 
     snps_indx = Vector{Union{Int}}(undef, size(snps, 1))
-    for (i, chr_pos_sing) in enumerate(snps)
+    @threads for (i, chr_pos_sing) in collect(enumerate(snps))
         local j = searchsortedfirst(ref_genotypes.snp_info.chr_pos, chr_pos_sing)
-        if ref_genotypes.snp_info.chr_pos[j] != chr_pos_sing
+        if j > length(ref_genotypes.snp_info.chr_pos) || ref_genotypes.snp_info.chr_pos[j] != chr_pos_sing
             j = -1
         end
         snps_indx[i] = j
@@ -124,6 +149,48 @@ function getLDmat(ref_genotypes::SnpData,
 
     return mat_r²(ref_genotypes.snparray, kept_indx), snps_indx .> 0
 end
+
+
+function getLDmat(ref_genotypes::SnpData, 
+    snps::AbstractVector{Tuple{T1, T2}} where T1 where T2
+    )::Vector{Bool}
+    return getLDmat(ref_genotypes, Vector{Tuple{Any, Any}}(snps))
+end
+
+function getLDmat2(ref_genotypes::SnpData, 
+    snps::AbstractVector{Tuple{Any, Any}}
+    )::Tuple{Matrix{Float64}, Vector{Bool}}
+
+    snps_indx = Vector{Union{Int}}(undef, size(snps, 1))
+    for (i, chr_pos_sing) in enumerate(snps)
+        local j = searchsortedfirst(ref_genotypes.snp_info.chr_pos, chr_pos_sing)
+        if j > length(ref_genotypes.snp_info.chr_pos) || ref_genotypes.snp_info.chr_pos[j] != chr_pos_sing
+            j = -1
+        end
+        snps_indx[i] = j
+    end
+    kept_indx = snps_indx[snps_indx .> 0]
+
+    return mat_r²_2(ref_genotypes.snparray, kept_indx), snps_indx .> 0
+end
+
+function getLDmat3(ref_genotypes::SnpData, 
+    snps::AbstractVector{Tuple{Any, Any}}
+    )::Tuple{Matrix{Float64}, Vector{Bool}}
+
+snps_indx = Vector{Union{Int}}(undef, size(snps, 1))
+@threads :static for (i, chr_pos_sing) in collect(enumerate(snps))
+local j = searchsortedfirst(ref_genotypes.snp_info.chr_pos, chr_pos_sing)
+if j > length(ref_genotypes.snp_info.chr_pos) || ref_genotypes.snp_info.chr_pos[j] != chr_pos_sing
+j = -1
+end
+snps_indx[i] = j
+end
+kept_indx = snps_indx[snps_indx .> 0]
+
+return mat_r²_3(ref_genotypes.snparray, kept_indx), snps_indx .> 0
+end
+
 
 
 """
@@ -140,6 +207,35 @@ function clump(ref_genotypes::SnpData,
     
     for i in 1:(lastindex(snps)-1)
         if indx_v_b[i]
+            @threads for j in (i+1):lastindex(snps)
+                if r2_mat[idx_on_mat[i], idx_on_mat[j]] > r2_tresh
+                    indx_v_b[j] = false
+                end
+            end
+        end
+    end
+
+    return indx_v_b
+end
+
+
+function clump(ref_genotypes::SnpData, 
+    snps::AbstractVector{Tuple{T1, T2}} where T1 where T2, 
+    r2_tresh::Float64 = 0.1
+    )::Vector{Bool}
+    return clump(ref_genotypes, Vector{Tuple{Any, Any}}(snps), r2_tresh)
+end
+
+function clump2(ref_genotypes::SnpData, 
+                snps::AbstractVector{Tuple{Any, Any}}, 
+                r2_tresh::Float64 = 0.1
+                )::Vector{Bool}
+
+    r2_mat, indx_v_b = getLDmat2(ref_genotypes, snps)
+    idx_on_mat = accumulate(+, indx_v_b)
+
+    for i in 1:(lastindex(snps)-1)
+        if indx_v_b[i]
             for j in (i+1):lastindex(snps)
                 if r2_mat[idx_on_mat[i], idx_on_mat[j]] > r2_tresh
                     indx_v_b[j] = false
@@ -151,6 +247,27 @@ function clump(ref_genotypes::SnpData,
     return indx_v_b
 end
 
+
+function clump3(ref_genotypes::SnpData, 
+    snps::AbstractVector{Tuple{Any, Any}}, 
+    r2_tresh::Float64 = 0.1
+    )::Vector{Bool}
+
+    r2_mat, indx_v_b = getLDmat3(ref_genotypes, snps)
+    idx_on_mat = accumulate(+, indx_v_b)
+
+    for i in 1:(lastindex(snps)-1)
+        if indx_v_b[i]
+            @threads for j in (i+1):lastindex(snps)
+                if r2_mat[idx_on_mat[i], idx_on_mat[j]] > r2_tresh
+                    indx_v_b[j] = false
+                end
+            end
+        end
+    end
+
+    return indx_v_b
+end
 
 """
 format Genotype information contained in SnpData for optimised snp search based on chromosome position.

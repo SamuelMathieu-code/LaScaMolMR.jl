@@ -68,7 +68,7 @@ function make_types_and_headers(file::Union{QTLStudy, GWAS})::Tuple{Dict{Int, Da
 end
 
 
-function verify_and_simplify_columns(exposure::Union{QTLStudy, GWAS})::Bool
+function verify_and_simplify_columns!(exposure::Union{QTLStudy, GWAS})
 
     if exposure isa QTLStudy
         trait_each_path_nothing =  nothing in exposure.traits_for_each_path
@@ -79,61 +79,76 @@ function verify_and_simplify_columns(exposure::Union{QTLStudy, GWAS})::Bool
         trait_each_path_nothing = false
     end
 
-
     # Treating exposure
-    # keep only columns and verify all columns are satisfied       ----> cette section pourrait être optimisée? Encapsuler dans une foncion!
+    # keep only columns and verify all columns are satisfied 
     new_cols_exposure::Dict{Int, GenVarInfo} = Dict()
-    col_log_pval = -1
-    cols_ok = Dict(CHR => false,
-                   POS => false,
-                   BETA => false,
-                   SE => false,
-                   PVAL => false,
-                   A_EFFECT => false,
-                   A_OTHER => false,
-                   TRAIT_NAME => !trait_each_path_nothing)
+    cols_ok = Dict{GenVarInfo, Bool}(CHR => 0,
+                   POS => 0,
+                   BETA => 0,
+                   SE => 0,
+                   PVAL => 0,
+                   A_EFFECT => 0,
+                   A_OTHER => 0,
+                   TRAIT_NAME => (!trait_each_path_nothing) ? 1 : 0)
 
     for key in keys(exposure.columns)
-        for info in [CHR, POS, BETA, SE, A_EFFECT, A_OTHER]
+        for info in [CHR, POS, BETA, SE, A_EFFECT, A_OTHER, PVAL, TRAIT_NAME]
             if exposure.columns[key] == info
-                cols_ok[info] = true
+                cols_ok[info] = 1
                 new_cols_exposure[key] = info
             end
         end
-
-        if exposure.columns[key] == PVAL
-            cols_ok[PVAL] = true
-            new_cols_exposure[key] = PVAL
-            col_log_pval = -1
-        elseif cols_ok[PVAL] == false && exposure.columns[key] == LOG_PVAL
-            col_log_pval = key
-        end
-    end
-
-    if col_log_pval != -1
-        new_cols_exposure[LOG_PVAL] = col_log_pval
-        cols_ok[PVAL] = true
     end
 
     for key in keys(cols_ok)
-        if cols_ok[key] != true
-            throw(ArgumentError("Missing information in columns. Should contain at least : CHR, POS, A_EFFECT, A_OTHER, BETA, SE, PVAL/MINUS_LOG10_PVAL."))
+        if cols_ok[key] == 0
+            throw(ArgumentError("Missing information in columns. GWAS/QTL Should contain at least : CHR, POS, A_EFFECT, A_OTHER, BETA, SE, PVAL."))
         end
     end
     exposure.columns = new_cols_exposure
-    return col_log_pval != -1
+end
 
+function read_filter_file(file::GWAS, 
+                          add_trait_name_b::Bool, 
+                          threads::Bool, 
+                          filtered::Bool, 
+                          trsf_log_pval::Union{Function, Nothing}, 
+                          in_window::Function, 
+                          header::Vector{Symbol}, 
+                          types::Dict{Int, DataType})::Dataset
+
+    d = filereader(file.path, delimiter = file.separator, 
+                           header = header, types = types, skipto=2, 
+                           makeunique=true, eolwarn=false, threads = threads)[:,collect(keys(file.columns))]
+            
+    if add_trait_name_b
+        d.trait = repeat([file.trait_name], nrow(d))
+    end
+    
+    if trsf_log_pval !== nothing
+        modify!(d, :pval_exp => trsf_log_pval, threads = threads)
+    end
+
+    if !filtered
+        d = @chain d begin 
+            filter([:chr, :pos, :trait, :pval_exp], 
+                type = in_window, threads = threads) # dataset filtered for window and significance
+            filter(:a_effect_exp, type = x -> length(x) == 1, threads = threads) # remove indels
+            filter(:a_other_exp, type = x -> length(x) == 1, threads = threads)  # remove indels
+        end
+    end
+    
+    return modify(d, [:a_effect_exp, :a_other_exp] => x -> lowercase.(x), threads = threads)
 end
 
 
-function read_qtl_files(exposure::QTLStudy, 
-    col_log_pval::Bool, 
+function read_qtl_files(exposure::QTLStudy,
     types::Dict{Int, DataType}, 
     header::Vector{Symbol},
     window::Int,
     p_tresh::Float64,
     filtered::Bool =false,
-    trsf_log_pval::Function = x -> exp10.(x))::Dataset
+    trsf_log_pval::Union{Function, Nothing} = nothing)::Dataset
 
     # Dicionary of trait -- tss
     ref_dict = Dict(zip(exposure.trait_v, zip(exposure.chr_v, exposure.tss_v)))
@@ -153,61 +168,12 @@ function read_qtl_files(exposure::QTLStudy,
     if Base.Threads.nthreads() > length(exposure) ### Case when nore threads than files -> read each file in //
         for i in 1:lastindex(data_vect)
             file = exposure[i]
-            d = filereader(file.path, delimiter = file.separator, 
-                           header = header, types = types, skipto=2, 
-                           makeunique=true, eolwarn=false)[:,collect(keys(file.columns))]
-            
-            if add_trait_name_b
-                d.trait = repeat([file.trait_name], nrow(d))
-            end
-            
-            if col_log_pval
-                modify!(d, :pval => trsf_log_pval)
-            end
-
-            if !filtered
-                d = @chain d  begin 
-                    filter([:chr, :pos, :trait, :pval_exp], 
-                        type = in_window) # dataset filtered for window and significance
-                    filter(:a_effect_exp, type = x -> length(x) == 1) # remove indels
-                    filter(:a_other_exp, type = x -> length(x) == 1)  # remove indels
-                end
-            end
-            
-            modify!(d, [:a_effect_exp, :a_other_exp] => x -> lowercase.(x))
-
-            data_vect[i] = d
+            data_vect[i] = read_filter_file(file, add_trait_name_b, true, filtered, trsf_log_pval, in_window, header, types)
         end
     else                                        ### Case when more files than threads -> read multiple files in //
         @threads for i in 1:lastindex(data_vect)
             file = exposure[i]
-            d = filereader(file.path, delimiter = file.separator, 
-                           header = header, types = types, skipto=2, 
-                           makeunique=true, eolwarn=false, 
-                           threads = false)[:,collect(keys(file.columns))]
-            
-            if add_trait_name_b
-                d.trait = repeat([file.trait_name], nrow(d))
-            end
-            
-            if col_log_pval
-                modify!(d, :pval => trsf_log_pval, threads = false)
-            end
-
-            if !filtered
-                d = @chain d  begin 
-                    filter([:chr, :pos, :trait, :pval_exp], 
-                        type = in_window, threads = false) # dataset filtered for window and significance
-                    filter(:a_effect_exp, type = x -> length(x) == 1,  # remove indels
-                        threads = false)
-                    filter(:a_other_exp, type = x -> length(x) == 1,  # remove indels
-                        threads = false)
-                end
-            end
-
-            modify!(d, [:a_effect_exp, :a_other_exp] => x -> lowercase.(x), threads = false)
-            
-            data_vect[i] = d
+            data_vect[i] = read_filter_file(file, add_trait_name_b, false, filtered, trsf_log_pval, in_window, header, types)
         end
     end
 
@@ -235,26 +201,27 @@ function mrStudyCis(exposure::QTLStudy,
     exposure_filtered = false,
     mr_methods::AbstractVector{Function} = [mr_egger, mr_ivw],
     α::Float64 = 0.05,
-    trsf_log_pval_exp::Function = x -> exp10.(x),
-    trsf_log_pval_out::Function = x -> exp10.(x)
+    trsf_pval_exp::Union{Function, Nothing} = nothing,
+    trsf_pval_out::Union{Function, Nothing} = nothing
     )::Union{Dataset, GroupBy}
     
     # plink_files_load_tsk = @async global GenotypesArr = [SnpData(SnpArrays.datadir(file)) for file in bedbimfam_dirnames]
 
     #qtl_data
-    col_log_pval = verify_and_simplify_columns(exposure)
+    verify_and_simplify_columns!(exposure)
     types, header = make_types_and_headers(exposure)
-    qtl_d = read_qtl_files(exposure, col_log_pval, types, header, window, p_tresh, exposure_filtered, trsf_log_pval_exp)
+    qtl_d = read_qtl_files(exposure, types, header, window, p_tresh, exposure_filtered, trsf_pval_exp)
     
     #gwas_data
-    col_log_pval = verify_and_simplify_columns(outcome)
+    verify_and_simplify_columns!(outcome)
     types, header = make_types_and_headers(outcome)
     gwas_d = filereader(outcome.path, 
                         delimiter = outcome.separator, 
                         header = header, types = types, skipto=2, 
                         makeunique=true, eolwarn=false)[:,collect(keys(outcome.columns))]
-    if col_log_pval
-        modify!(gwas_d, :pval => trsf_log_pval_out)
+    
+    if trsf_pval_out !== nothing
+        modify!(gwas_d, :pval => trsf_pval_out)
     end
     modify!(gwas_d, [:a_effect_out, :a_other_out] => x -> lowercase.(x))
 
@@ -268,8 +235,9 @@ function mrStudyCis(exposure::QTLStudy,
 
     # wait for loaded plink files and format them
     # wait(plink_files_load_tsk)
-    GenotypesArr = [SnpData(SnpArrays.datadir(file)) for file in bedbimfam_dirnames]
-    @threads for i in 1:lastindex(GenotypesArr)
+    GenotypesArr = Vector{SnpData}(undef, length(bedbimfam_dirnames))
+    @threads for i in 1:lastindex(bedbimfam_dirnames)
+        GenotypesArr[i] = SnpData(SnpArrays.datadir(bedbimfam_dirnames[i]))
         formatSnpData!(GenotypesArr[i])
     end
 
@@ -277,7 +245,7 @@ function mrStudyCis(exposure::QTLStudy,
 
     #### for d in eachgroup(joined_d) -> Plink + MR (implement in NaiveCis)
     if approach == "naive"
-        return NaiveCis(joined_d, r2_tresh, GenotypesArr, one_file_per_chr_plink, mr_methods, α)
+        return NaiveCis(joined_d, GenotypesArr, r2_tresh = r2_tresh, one_file_per_chr_plink = one_file_per_chr_plink, mr_methodsV = mr_methods, α = α)
     elseif approach == "test"
         return joined_d
     elseif approach == "strict"

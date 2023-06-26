@@ -1,10 +1,54 @@
 using Distributions
 using GLM
+using LinearAlgebra
+using Random
 
 
-##################################################
-#                     MrPerf                     #
-##################################################
+    ###########################
+    #        Utilities        #
+    ###########################
+
+
+function wm_estimate(β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
+                     se_β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
+                     β_X::AbstractVector{F} where F <: Union{Float64, Missing}
+                     )::Float64
+θ_v = β_Y ./ β_X
+order = sortperm(θ_v)
+θ_v, se_βy_ordered = θ_v[order], se_β_Y[order]
+w_v = se_βy_ordered .^ (-2)
+w_v /= sum(w_v)
+p_v = accumulate(+, w_v) - w_v ./ 2
+p = findfirst(x -> x ≥ 50, p_v)
+θ_est = (p == 1) ? θ_v[p-1] + (θ_v[p] - θ_v[p-1])*(50 - p_v[p-1])/(p_v[p] - p_v[p-1]) : θ_v[p]
+return θ_est
+end
+
+
+function bootstrap_se_wm(β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
+    se_β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
+    β_X::AbstractVector{F} where F <: Union{Float64, Missing},
+    se_β_X::AbstractVector{F} where F <: Union{Float64, Missing}, 
+    iterations = 1000,
+    seed = 42)::Float64
+
+    Random.seed!(seed)
+
+    dx = MvNormal(β_X, se_β_X)
+    dy = MvNormal(β_Y, se_β_Y)
+    θ_est_v = Vector{Float64}(undef, iterations)
+    for i in 1:iterations
+        θ_est_v[i] = wm_estimate(rand(dy), se_β_Y, rand(dx))
+    end
+    return std(θ_est_v)
+end
+
+
+    #########################################
+    #                 MrPerf                #
+    #########################################
+
+# eventuality : make lm more efficient by not calculating sumstats (only estimate)
 
 
 """
@@ -13,6 +57,7 @@ Struct encapsulating the outputs of a Mendelian Randomization analysis
 struct mr_output
     nivs::Int
     effect::Float64
+    se_effect::Float64
     ci_low::Float64
     ci_high::Float64
     p::Float64
@@ -29,10 +74,10 @@ end
 Wald ratio for Mendelian Randomization with a single instrumental variable
      y is outcome, x is exposure
 """
-function mr_wald(β_Y::Float64, 
-                 se_β_Y::Float64, 
-                 β_X::Float64,  
-                 α::Float64 = 0.05)::mr_output  # À véerifier que la distribustion normale convient!!!!!!!!
+function mr_wald(β_Y::F where F <: AbstractFloat, 
+                 se_β_Y::F where F <: AbstractFloat, 
+                 β_X::F where F <: AbstractFloat, 
+                 α::F where F <: AbstractFloat = 0.05)::mr_output # À véerifier que la distribustion normale convient!!!!!!!!
     θ = β_Y / β_X
     se_θ = se_β_Y / abs(β_X)
     dh = Normal(0, se_θ)
@@ -40,13 +85,13 @@ function mr_wald(β_Y::Float64,
     p = 2*cdf(dh, -abs(θ))
     ci_low, ci_high = quantile(dobs, α/2), quantile(dobs, 1-α/2)
     
-    return mr_output(1, θ, ci_low, ci_high, p, NaN, NaN, NaN, NaN, NaN, NaN)
+    return mr_output(1, θ, se_θ, ci_low, ci_high, p, NaN, NaN, NaN, NaN, NaN, NaN)
 end
 
-function mr_wald(β_y::Vector{Float64}, 
-                 se_β_y::Vector{Float64}, 
-                 β_x::Vector{Float64},  
-                 α::Float64 = 0.05)::mr_output
+function mr_wald(β_y::AbstractVector{F} where F <: Union{AbstractFloat, Missing}, 
+                 se_β_y::AbstractVector{F} where F <: Union{AbstractFloat, Missing}, 
+                 β_x::AbstractVector{F} where F <: Union{AbstractFloat, Missing}, 
+                 α::F where F <: AbstractFloat = 0.05)::mr_output
     return mr_wald(β_y[1], se_β_y[1], β_x[1], α)
 end
 
@@ -55,84 +100,125 @@ end
 Inverse variance weighted linear regression with simple weights (se(B_Y)^-2) Mendelian Randomization
     Y is outcome, X is exposure
 """
-function mr_ivw(β_Y::Vector{Float64}, 
-                se_β_Y::Vector{Float64}, 
-                β_X::Vector{Float64}, 
-                α::Float64 = 0.05)::mr_output 
+function mr_ivw(β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
+                se_β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
+                β_X::AbstractVector{F} where F <: Union{Float64, Missing}, 
+                α::F where F <: AbstractFloat = 0.05)::mr_output #where F <: Union{AbstractFloat, Missing}
 
+    
+    m = length(β_X)
+    if m < 2
+        return mr_output(m, NaN, NaN, NaN, NaN, NaN, 
+                         NaN, NaN, NaN, NaN, 
+                         NaN, NaN)
+    end
     # regression
-    regressor = lm(@formula(β_Y ~ 0 + β_X), (;β_X, β_Y), wts = se_β_Y .^ (-2))
+    w = se_β_Y .^ (-2)
+    regressor = lm(@formula(β_Y ~ 0 + β_X), (;β_X, β_Y), wts = w)
     θivw_est = coef(regressor)[1]
-    se_θivw_est = stderror(regressor)[1]
+    
+    ϵ = residuals(regressor)
+    u = sqrt.(w).*ϵ
+    X = sqrt.(w).*β_X
+    se_θivw_est = sqrt((u'*u)*(X'*X)^(-1)/(m-1))
+    σ = sqrt(sum(u.^2)/(m-1))
+    se_θivw_est /= min(σ, 1)
 
     dh = Normal(0, se_θivw_est)
     dobs = Normal(θivw_est, se_θivw_est)
     θ_ci_low, θ_ci_high = quantile(dobs, α/2), quantile(dobs, 1-α/2)
     p = 2*cdf(dh, -abs(θivw_est))
 
-    # heterogeneity --> À revoir éventuellement
-    if length(β_Y) ≥ 2
-        heter_stat = (length(β_X)-1) * (1/(length(β_X) - 2))^2 * sum((β_Y - residuals(regressor)).^2) # (n-1) * rse^2
-        chisq = Chisq(length(β_X) - 1) 
-        heter_p = 1 - cdf(chisq, heter_stat)
-    else
-        heter_stat = heter_p = NaN
-    end
+    heter_stat = sum((ϵ ./ se_β_Y).^2)
+    chisq = Chisq(m - 1)
+    heter_p = 1 - cdf(chisq, heter_stat)
 
-    return mr_output(length(β_Y), θivw_est, θ_ci_low, θ_ci_high, p, NaN, NaN, NaN, NaN, heter_stat, heter_p) 
+
+    return mr_output(length(β_Y), θivw_est, se_θivw_est, θ_ci_low, θ_ci_high, p, NaN, NaN, NaN, NaN, heter_stat, heter_p) 
 
 end
-
-
-# """
-# Weighted Median linear regression Medndelian Randomization --> To come in the future
-# """
-# function mr_wm(β_Y::Vector{Float64}, 
-#                se_β_Y::Vector{Float64}, 
-#                β_X::Vector{Float64}, 
-#                α::Float64 = 0.05)::mr_output 
-
-#     return mr_output()
-# end
 
 
 """
 Egger Mendelian Randomization
     Y is outcome, X is exposure
 """
-function mr_egger(β_Y::Vector{Float64}, 
-                  se_β_Y::Vector{Float64}, 
-                  β_X::Vector{Float64}, 
-                  α::Float64 = 0.05)::mr_output
+function mr_egger(β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
+                  se_β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
+                  β_X::AbstractVector{F} where F <: Union{Float64, Missing}, 
+                  α::F where F <: AbstractFloat = 0.05)::mr_output
     
     # regression
+    m = length(β_X)
+    if m < 3
+        return mr_output(m, NaN, NaN, NaN, NaN, NaN, 
+                        NaN, NaN, NaN, NaN, 
+                        NaN, NaN)
+    end
+    w =  se_β_Y .^ (-2)
     β_Y_abs = sign.(β_X).*β_Y
     β_X_abs = abs.(β_X)
-    regressor = lm(@formula(β_Y_abs ~ β_X_abs), (;β_X_abs, β_Y_abs), wts = se_β_Y .^ (-2))
+    regressor = lm(@formula(β_Y_abs ~ β_X_abs), (;β_X_abs, β_Y_abs), wts = w)
     θ_est = coef(regressor)
-    se_θ_est = stderror(regressor)
 
-    # index 1 is intercept and index two is effect
+    ϵ = residuals(regressor)
+    X = sqrt.(w) .* [ones(m) β_X_abs]
+    u = sqrt.(w) .* ϵ
+    se = (u'*u)*(X'*X)^(-1)/(m-2)
+    σ = sqrt(sum(u.^2)/(m-2))
+    se_θ_est = sqrt.(diag(se)) ./ min(σ, 1)
+
+    # index 1 is intercept and index two is effect (se_θ_est, θ_est)
     dh = Normal(0, se_θ_est[2])
     dobs = Normal(θ_est[2], se_θ_est[2])
     dintercept = Normal(0, se_θ_est[1])
+    
     θ_ci_low, θ_ci_high = quantile(dobs, α/2), quantile(dobs, 1-α/2)
     p = 2*cdf(dh, -abs(θ_est[2]))
+
     p_intercept = 1 - 2*(cdf(dintercept, -abs(θ_est[1])))
     ci_low_intercept, ci_high_intercept = quantile(dintercept, α/2), quantile(dintercept, 1-α/2)
 
     # heterogeneity
-    if length(β_Y) ≥ 3
-        heter_stat = sum((residuals(regressor) ./ se_β_Y).^2)  # Pourquoi c'est différent de 
-        chisq = Chisq(length(β_X) - 2)
-        heter_p = 1 - cdf(chisq, heter_stat)
-    else
-        heter_stat = heter_p = NaN
-    end
+    heter_stat = sum((ϵ ./ se_β_Y).^2)
+    chisq = Chisq(m - 2)
+    heter_p = 1 - cdf(chisq, heter_stat)
 
-    return mr_output(length(β_Y), θ_est[2], θ_ci_low, θ_ci_high, p, 
+    return mr_output(length(β_Y), θ_est[2], se_θ_est[2], θ_ci_low, θ_ci_high, p, 
                      θ_est[1], p_intercept, ci_low_intercept, ci_high_intercept, 
                      heter_stat, heter_p) 
 
+end
+
+
+"""
+Weighted Median Mendelian Randomization (Bowden et al., 2015)
+    Y is outcome, X is exposure
+"""
+function mr_wm(β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
+               se_β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
+               β_X::AbstractVector{F} where F <: Union{Float64, Missing},
+               se_β_X::AbstractVector{F} where F <: Union{Float64, Missing}, 
+               α::F where F <: AbstractFloat = 0.05,
+               iterations::Integer = 1000,
+               seed = 42)::mr_output
+    
+    m = length(β_X)
+    if m < 2
+        return mr_output(m, NaN, NaN, NaN, NaN, NaN, 
+                        NaN, NaN, NaN, NaN, 
+                        NaN, NaN)
+    end
+    
+    θ_est = wm_estimate(β_Y, se_β_Y, β_X)
+    # bootstrap fo find standard error
+    θ_se_est = bootstrap_se_wm(β_Y, se_β_Y, β_X, se_β_X, iterations, seed)
+
+    dh = Normal(0, θ_se_est)
+    dobs = Normal(θ_est, θ_se_est)
+    θ_ci_low, θ_ci_high = quantile(dobs, α/2), quantile(dobs, 1-α/2)
+    p = 2*cdf(dh, -abs(θ_est))
+
+    return mr_output(m, θ_est, θ_se_est, θ_ci_low, θ_ci_high, p, NaN, NaN, NaN, NaN, NaN, NaN)
 end
 
