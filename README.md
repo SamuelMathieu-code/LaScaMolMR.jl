@@ -55,4 +55,4 @@ LaScaMol.jl is a distrbuted Mendelian Randomization (MR) package that is focused
 - [ ] Benchmarks
     - [x] Benchmark NaiveCis, clump, mrStudyCis (test)
     - [ ] Benchmark between @threads with collect(enumerate) and qthreads (NaiveCis.jl)
-- [ ] Implement and **Test** weighted median
+- [x] Implement and **Test** weighted median
