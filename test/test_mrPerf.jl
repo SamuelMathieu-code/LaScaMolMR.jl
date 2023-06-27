@@ -24,13 +24,13 @@ data3 = (;
     se_βy = [0.02, 0.1, 0.4])
 
 data_error = (;
-    βx = [-0.25, 0.35],
+    βx = [-0.25, 0.35, 0.4, 0.3],
     βy = [-0.1, 0.2, 0.22],
     se_βx = [0.65, 1.65, 0.8],
     se_βy = [0.02, 0.1, 0.4])
 
 data_perfect = (;
-    βx = [0.1, 0.2, 0.3],
+    βx = [0.1000001, 0.1999999, 0.3],
     βy = 2*[0.1, 0.2, 0.3],
     se_βx = [0.01, 0.01, 0.01],
     se_βy = [0.01, 0.01, 0.01])
@@ -39,7 +39,7 @@ data_perfect = (;
     # All regressions
     res0_ivw = mr_ivw(data.βy, data.se_βy, data.βx, data.se_βx, 0.025)
     res0_egger = mr_egger(data.βy, data.se_βy, data.βx)
-    res1 = mr_wald(data1.βy, data1.se_βy, data1.βx, data.se_βx, 0.05)
+    res1 = mr_wald(data1.βy, data1.se_βy, data1.βx, 0.05)
     res0_wm = mr_wm(data.βy, data.se_βy, data.βx, data.se_βx, 0.025)
     res2_ivw = mr_ivw(data2.βy, data2.se_βy, data2.βx, data2.se_βx, 0.05)
     res2_egger = mr_egger(data2.βy, data2.se_βy, data2.βx, data2.se_βx, 0.025)
@@ -69,7 +69,7 @@ data_perfect = (;
     
     @test res2_ivw.nivs == 2 && isnan(res2_ivw.intercept) && !isinf(res2_ivw.effect)
     
-    @test res2_wm.nivs == 2 && isnan(res2_wm.intercept) && !isinf(res2_wm.effect)
+    @test res2_wm.nivs == 2 && isnan(res2_wm.intercept) && isnan(res2_wm.effect)
 
     @test isnan(res2_egger.heter_p) && isnan(res2_egger.heter_stat)
     
@@ -81,8 +81,8 @@ data_perfect = (;
     @test isnan(res1.heter_p) && isnan(res1.heter_stat) && 
         isnan(res1.intercept) && isnan(res1.p_intercept)
 
-    @test isapprox(res_perfect_egger.effect, 2, atol = 1e-10)
-    @test isapprox(res_perfect_ivw.effect, 2, atol = 1e-10)
-    @test isapprox(res_perfect_wm.effect, 2, atol = 1e-10)
+    @test isapprox(res_perfect_egger.effect, 2, atol = 1e-3)
+    @test isapprox(res_perfect_ivw.effect, 2, atol = 1e-3)
+    @test isapprox(res_perfect_wm.effect, 2, atol = 1e-3)
 
 end

@@ -97,7 +97,7 @@ end
 function mr_wald(β_y::AbstractVector{F} where F <: Union{AbstractFloat, Missing}, 
                  se_β_y::AbstractVector{F} where F <: Union{AbstractFloat, Missing}, 
                  β_x::AbstractVector{F} where F <: Union{AbstractFloat, Missing}, 
-                 se_β_X::AbstractVector{F} where F <: Union{Float64, Missing} = [],
+                 se_β_X::AbstractVector{F} where F <: Union{Float64, Missing} = Vector{Float64}([]),
                  α::F where F <: AbstractFloat = 0.05)::mr_output
     return mr_wald(β_y[1], se_β_y[1], β_x[1], α)
 end
@@ -110,7 +110,7 @@ Inverse variance weighted linear regression with simple weights (se(B_Y)^-2) Men
 function mr_ivw(β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
                 se_β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
                 β_X::AbstractVector{F} where F <: Union{Float64, Missing}, 
-                se_β_X::AbstractVector{F} where F <: Union{Float64, Missing} = [],
+                se_β_X::AbstractVector{F} where F <: Union{Float64, Missing} = Vector{Float64}([]),
                 α::F where F <: AbstractFloat = 0.05)::mr_output #where F <: Union{AbstractFloat, Missing}
 
     
@@ -154,7 +154,7 @@ Egger Mendelian Randomization
 function mr_egger(β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
                   se_β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
                   β_X::AbstractVector{F} where F <: Union{Float64, Missing}, 
-                  se_β_X::AbstractVector{F} where F <: Union{Float64, Missing} = [],
+                  se_β_X::AbstractVector{F} where F <: Union{Float64, Missing} = Vector{Float64}([]),
                   α::F where F <: AbstractFloat = 0.05)::mr_output
     
     # regression
