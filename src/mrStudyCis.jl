@@ -3,7 +3,8 @@ using InMemoryDatasets
 using Base.Threads
 using SnpArrays
 using Folds
-using Chain # unused
+using Chain
+using ThreadPools
 
     ########################
     #       Constants      #
@@ -132,9 +133,9 @@ function read_filter_file(file::GWAS,
     if !filtered
         d = @chain d begin 
             filter([:chr, :pos, :trait, :pval_exp], 
-                type = in_window, threads = threads) # dataset filtered for window and significance
-            filter(:a_effect_exp, type = x -> length(x) == 1, threads = threads) # remove indels
-            filter(:a_other_exp, type = x -> length(x) == 1, threads = threads)  # remove indels
+                type = in_window, threads = threads, missings = false) # dataset filtered for window and significance
+            filter(:a_effect_exp, type = x -> length(x) == 1, threads = threads, missings = false) # remove indels
+            filter(:a_other_exp, type = x -> length(x) == 1, threads = threads, missings = false)  # remove indels
         end
     end
     
@@ -171,7 +172,7 @@ function read_qtl_files(exposure::QTLStudy,
             data_vect[i] = read_filter_file(file, add_trait_name_b, true, filtered, trsf_log_pval, in_window, header, types)
         end
     else                                        ### Case when more files than threads -> read multiple files in //
-        @threads for i in 1:lastindex(data_vect)
+        @qthreads for i in 1:lastindex(data_vect)
             file = exposure[i]
             data_vect[i] = read_filter_file(file, add_trait_name_b, false, filtered, trsf_log_pval, in_window, header, types)
         end
@@ -228,7 +229,7 @@ function mrStudyCis(exposure::QTLStudy,
     biallelic(s::SubArray) = (s[1]==s[2] && s[3] == s[4]) || (s[1] == s[4] && s[2] == s[3])
     joined_d = @chain qtl_d begin
         innerjoin(gwas_d, on = [:chr, :pos], makeunique = false)
-        filter([:a_effect_exp, :a_effect_out, :a_other_exp, :a_other_out], type = biallelic) # filter for "obvious" non biallelic variants
+        filter([:a_effect_exp, :a_effect_out, :a_other_exp, :a_other_out], type = biallelic, missings = false) # filter for "obvious" non biallelic variants
         filter(:, by = !ismissing)
         groupby(:trait, stable = false)
     end

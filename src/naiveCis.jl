@@ -199,11 +199,11 @@ function NaiveCis3(data::GroupBy, GenotypesArr::AVSD where AVSD <: AbstractVecto
             end
         end
 
-        β_out, β_exp, se_out = ivs_d.β_out.val, ivs_d.β_exp.val, ivs_d.se_out.val
+        β_out, β_exp, se_out, se_exp = ivs_d.β_out.val, ivs_d.β_exp.val, ivs_d.se_out.val, ivs_d.se_exp.val
         # make mr methods and write ouput in dataset
         for (j, mr_method) in enumerate(mr_methodsV)
             if size(ivs_d, 1) ≥ 1
-                res = mr_method(β_out, se_out, β_exp, α)
+                res = mr_method(β_out, se_out, β_exp, se_exp , α)
             else
                 res = mr_output(0, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN)
             end

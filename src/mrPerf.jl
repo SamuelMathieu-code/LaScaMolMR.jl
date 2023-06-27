@@ -2,45 +2,51 @@ using Distributions
 using GLM
 using LinearAlgebra
 using Random
+using Statistics
 
 
     ###########################
     #        Utilities        #
     ###########################
 
-
+"""
+Raw weighted median effect size estimate
+"""
 function wm_estimate(β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
                      se_β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
                      β_X::AbstractVector{F} where F <: Union{Float64, Missing}
                      )::Float64
 θ_v = β_Y ./ β_X
 order = sortperm(θ_v)
-θ_v, se_βy_ordered = θ_v[order], se_β_Y[order]
-w_v = se_βy_ordered .^ (-2)
-w_v /= sum(w_v)
-p_v = accumulate(+, w_v) - w_v ./ 2
-p = findfirst(x -> x ≥ 50, p_v)
-θ_est = (p == 1) ? θ_v[p-1] + (θ_v[p] - θ_v[p-1])*(50 - p_v[p-1])/(p_v[p] - p_v[p-1]) : θ_v[p]
+θ_v, se_βy_ordered, βx_ordered = θ_v[order], se_β_Y[order], β_X[order]
+w_v = (βx_ordered ./ se_βy_ordered) .^ 2
+p_v = accumulate(+, w_v) - (w_v ./ 2)
+p_v /= sum(w_v)
+p = findfirst(x -> x ≥ 0.5, p_v)
+θ_est = (p != 1) ? θ_v[p-1] + (θ_v[p] - θ_v[p-1])*(0.5 - p_v[p-1])/(p_v[p] - p_v[p-1]) : 0
 return θ_est
 end
 
 
+"""
+Numerical esimation of weighted median effect size standard error
+"""
 function bootstrap_se_wm(β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
     se_β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
     β_X::AbstractVector{F} where F <: Union{Float64, Missing},
     se_β_X::AbstractVector{F} where F <: Union{Float64, Missing}, 
-    iterations = 1000,
+    iterations = 5000,
     seed = 42)::Float64
 
     Random.seed!(seed)
 
-    dx = MvNormal(β_X, se_β_X)
-    dy = MvNormal(β_Y, se_β_Y)
+    dx = MvNormal(Vector{Float64}(β_X), Vector{Float64}(se_β_X))
+    dy = MvNormal(Vector{Float64}(β_Y), Vector{Float64}(se_β_Y))
     θ_est_v = Vector{Float64}(undef, iterations)
     for i in 1:iterations
         θ_est_v[i] = wm_estimate(rand(dy), se_β_Y, rand(dx))
     end
-    return std(θ_est_v)
+    return Statistics.std(θ_est_v)
 end
 
 
@@ -91,6 +97,7 @@ end
 function mr_wald(β_y::AbstractVector{F} where F <: Union{AbstractFloat, Missing}, 
                  se_β_y::AbstractVector{F} where F <: Union{AbstractFloat, Missing}, 
                  β_x::AbstractVector{F} where F <: Union{AbstractFloat, Missing}, 
+                 se_β_X::AbstractVector{F} where F <: Union{Float64, Missing} = [],
                  α::F where F <: AbstractFloat = 0.05)::mr_output
     return mr_wald(β_y[1], se_β_y[1], β_x[1], α)
 end
@@ -103,6 +110,7 @@ Inverse variance weighted linear regression with simple weights (se(B_Y)^-2) Men
 function mr_ivw(β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
                 se_β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
                 β_X::AbstractVector{F} where F <: Union{Float64, Missing}, 
+                se_β_X::AbstractVector{F} where F <: Union{Float64, Missing} = [],
                 α::F where F <: AbstractFloat = 0.05)::mr_output #where F <: Union{AbstractFloat, Missing}
 
     
@@ -146,6 +154,7 @@ Egger Mendelian Randomization
 function mr_egger(β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
                   se_β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
                   β_X::AbstractVector{F} where F <: Union{Float64, Missing}, 
+                  se_β_X::AbstractVector{F} where F <: Union{Float64, Missing} = [],
                   α::F where F <: AbstractFloat = 0.05)::mr_output
     
     # regression
@@ -199,12 +208,12 @@ function mr_wm(β_Y::AbstractVector{F} where F <: Union{Float64, Missing},
                se_β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
                β_X::AbstractVector{F} where F <: Union{Float64, Missing},
                se_β_X::AbstractVector{F} where F <: Union{Float64, Missing}, 
-               α::F where F <: AbstractFloat = 0.05,
-               iterations::Integer = 1000,
+               α::F where F <: AbstractFloat = 0.05;
+               iterations::Integer = 5000,
                seed = 42)::mr_output
     
     m = length(β_X)
-    if m < 2
+    if m < 3
         return mr_output(m, NaN, NaN, NaN, NaN, NaN, 
                         NaN, NaN, NaN, NaN, 
                         NaN, NaN)
