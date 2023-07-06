@@ -5,6 +5,7 @@ using SnpArrays
 using Folds
 using Chain
 using ThreadPools
+using StatsBase
 
     ########################
     #       Constants      #
@@ -17,8 +18,7 @@ const GenVarInfo_Types = Dict(TRAIT_NAME => String,
                         A_OTHER => String,
                         BETA => Float64,
                         SE => Float64,
-                        PVAL => Float64,
-                        LOG_PVAL => Float64)
+                        PVAL => Float64)
 
 const GenVarInfo_Symbols_exp = Dict(TRAIT_NAME => :trait,
                           CHR => :chr,
@@ -27,8 +27,7 @@ const GenVarInfo_Symbols_exp = Dict(TRAIT_NAME => :trait,
                           A_OTHER => :a_other_exp,
                           BETA => :β_exp,
                           SE => :se_exp,
-                          PVAL => :pval_exp,
-                          LOG_PVAL => :pval_exp)
+                          PVAL => :pval_exp)
 
 const GenVarInfo_Symbols_out = Dict(TRAIT_NAME => :trait_out_,
                           CHR => :chr,
@@ -37,8 +36,7 @@ const GenVarInfo_Symbols_out = Dict(TRAIT_NAME => :trait_out_,
                           A_OTHER => :a_other_out,
                           BETA => :β_out,
                           SE => :se_out,
-                          PVAL => :pval_out,
-                          LOG_PVAL => :pval_out)
+                          PVAL => :pval_out)
 
 
     ########################
@@ -231,7 +229,14 @@ function mrStudyCis(exposure::QTLStudy,
         innerjoin(gwas_d, on = [:chr, :pos], makeunique = false)
         filter([:a_effect_exp, :a_effect_out, :a_other_exp, :a_other_out], type = biallelic, missings = false) # filter for "obvious" non biallelic variants
         filter(:, by = !ismissing)
-        groupby(:trait, stable = false)
+    end
+
+    joined_d.chr_pos = collect(zip(joined_d.chr, joined_d.pos))
+
+    if approach == "strict"
+        counts = countmap(joined_d.chr_pos)
+        is_unique_iv(s) = counts[s] == 1
+        filter!(joined_d, :chr_pos, by = is_unique_iv)
     end
 
     # wait for loaded plink files and format them
@@ -245,12 +250,10 @@ function mrStudyCis(exposure::QTLStudy,
     one_file_per_chr_plink = length(bedbimfam_dirnames) > 1
 
     #### for d in eachgroup(joined_d) -> Plink + MR (implement in NaiveCis)
-    if approach == "naive"
-        return NaiveCis(joined_d, GenotypesArr, r2_tresh = r2_tresh, one_file_per_chr_plink = one_file_per_chr_plink, mr_methodsV = mr_methods, α = α)
+    if approach == "naive" || approach == "strict"
+        return NaiveCis(groupby(joined_d, :trait, stable = false), GenotypesArr, r2_tresh = r2_tresh, one_file_per_chr_plink = one_file_per_chr_plink, mr_methodsV = mr_methods, α = α)
     elseif approach == "test"
-        return joined_d
-    elseif approach == "strict"
-        return Dataset()
+        return groupby(joined_d, :trait, stable = false)
     elseif approach == "2ndChance"
         return Dataset()
     else

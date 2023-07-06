@@ -21,7 +21,6 @@ end
     BETA
     SE
     PVAL
-    LOG_PVAL
 end
 
 @exportinstances GenVarInfo
@@ -192,7 +191,7 @@ function Base.getindex(iter::QTLStudy, i::Int)
     return GWAS(iter.path_v[i], iter.columns, iter.separator, iter.traits_for_each_path[i])
 end
 
-function Base.getindex(iter::QTLStudy, i::Union{AbstractUnitRange, AbstractVector{Int}})
+function Base.getindex(iter::QTLStudy, i::Union{AbstractUnitRange, AbstractVector{Int}})                 ########## Or QTLStudy subset?
     return [GWAS(iter.path_v[j], iter.columns, iter.separator, iter.traits_for_each_path[j]) for j in i]
     
 end

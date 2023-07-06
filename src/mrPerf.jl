@@ -40,13 +40,23 @@ function bootstrap_se_wm(β_Y::AbstractVector{F} where F <: Union{Float64, Missi
 
     Random.seed!(seed)
 
-    dx = MvNormal(Vector{Float64}(β_X), Vector{Float64}(se_β_X))
-    dy = MvNormal(Vector{Float64}(β_Y), Vector{Float64}(se_β_Y))
+    dx = MvNormal(Vector{Float64}(β_X), LinearAlgebra.Diagonal(map(abs2, Vector{Float64}(se_β_X))))
+    dy = MvNormal(Vector{Float64}(β_Y), LinearAlgebra.Diagonal(map(abs2, Vector{Float64}(se_β_Y))))
     θ_est_v = Vector{Float64}(undef, iterations)
     for i in 1:iterations
         θ_est_v[i] = wm_estimate(rand(dy), se_β_Y, rand(dx))
     end
     return Statistics.std(θ_est_v)
+end
+
+
+function ftest_egger(mod::LinearModel, n::Int64)::Tuple{Float64, Float64}
+    rss = deviance(mod)
+    tss = nulldeviance(mod)
+    p = dof(mod) - 2 # -2 for intercept and dispersion parameter
+    fstat = ((tss - rss) / rss) * ((n - p - 1) / p)
+    fdist = FDist(p, dof_residual(mod))
+    return fstat, ccdf(fdist, abs(fstat))
 end
 
 
@@ -73,6 +83,29 @@ struct mr_output
     ci_high_intercept::Float64
     heter_stat::Float64
     heter_p::Float64
+    fstat::Float64
+    fpval::Float64
+end
+
+
+"""
+Default values constructor for mr_output
+"""
+function mr_output(n::Int, 
+    effect::Float64 = NaN,
+    se_effect::Float64 = NaN,
+    ci_low::Float64 = NaN,
+    ci_high::Float64 = NaN,
+    p::Float64 = NaN,
+    intercept::Float64 = NaN,
+    p_intercept::Float64 = NaN,
+    ci_low_intercept::Float64 = NaN,
+    ci_high_intercept::Float64 = NaN,
+    heter_stat::Float64 = NaN,
+    heter_p::Float64 = NaN)::mr_output
+
+    mr_output(n, effect, se_effect, ci_low, ci_high, p, intercept, p_intercept, ci_low_intercept, ci_high_intercept, heter_stat, heter_p, NaN, NaN)
+    
 end
 
 
@@ -91,7 +124,7 @@ function mr_wald(β_Y::F where F <: AbstractFloat,
     p = 2*cdf(dh, -abs(θ))
     ci_low, ci_high = quantile(dobs, α/2), quantile(dobs, 1-α/2)
     
-    return mr_output(1, θ, se_θ, ci_low, ci_high, p, NaN, NaN, NaN, NaN, NaN, NaN)
+    return mr_output(1, θ, se_θ, ci_low, ci_high, p)
 end
 
 function mr_wald(β_y::AbstractVector{F} where F <: Union{AbstractFloat, Missing}, 
@@ -116,9 +149,7 @@ function mr_ivw(β_Y::AbstractVector{F} where F <: Union{Float64, Missing},
     
     m = length(β_X)
     if m < 2
-        return mr_output(m, NaN, NaN, NaN, NaN, NaN, 
-                         NaN, NaN, NaN, NaN, 
-                         NaN, NaN)
+        return mr_output(m)
     end
     # regression
     w = se_β_Y .^ (-2)
@@ -141,7 +172,6 @@ function mr_ivw(β_Y::AbstractVector{F} where F <: Union{Float64, Missing},
     chisq = Chisq(m - 1)
     heter_p = 1 - cdf(chisq, heter_stat)
 
-
     return mr_output(length(β_Y), θivw_est, se_θivw_est, θ_ci_low, θ_ci_high, p, NaN, NaN, NaN, NaN, heter_stat, heter_p) 
 
 end
@@ -160,14 +190,13 @@ function mr_egger(β_Y::AbstractVector{F} where F <: Union{Float64, Missing},
     # regression
     m = length(β_X)
     if m < 3
-        return mr_output(m, NaN, NaN, NaN, NaN, NaN, 
-                        NaN, NaN, NaN, NaN, 
-                        NaN, NaN)
+        return mr_output(m)
     end
     w =  se_β_Y .^ (-2)
     β_Y_abs = sign.(β_X).*β_Y
     β_X_abs = abs.(β_X)
     regressor = lm(@formula(β_Y_abs ~ β_X_abs), (;β_X_abs, β_Y_abs), wts = w)
+    fstat, fp = ftest_egger(regressor.model, m)
     θ_est = coef(regressor)
 
     ϵ = residuals(regressor)
@@ -195,8 +224,7 @@ function mr_egger(β_Y::AbstractVector{F} where F <: Union{Float64, Missing},
 
     return mr_output(length(β_Y), θ_est[2], se_θ_est[2], θ_ci_low, θ_ci_high, p, 
                      θ_est[1], p_intercept, ci_low_intercept, ci_high_intercept, 
-                     heter_stat, heter_p) 
-
+                     heter_stat, heter_p, fstat, fp)
 end
 
 
@@ -214,9 +242,7 @@ function mr_wm(β_Y::AbstractVector{F} where F <: Union{Float64, Missing},
     
     m = length(β_X)
     if m < 3
-        return mr_output(m, NaN, NaN, NaN, NaN, NaN, 
-                        NaN, NaN, NaN, NaN, 
-                        NaN, NaN)
+        return mr_output(m)
     end
     
     θ_est = wm_estimate(β_Y, se_β_Y, β_X)
@@ -228,6 +254,6 @@ function mr_wm(β_Y::AbstractVector{F} where F <: Union{Float64, Missing},
     θ_ci_low, θ_ci_high = quantile(dobs, α/2), quantile(dobs, 1-α/2)
     p = 2*cdf(dh, -abs(θ_est))
 
-    return mr_output(m, θ_est, θ_se_est, θ_ci_low, θ_ci_high, p, NaN, NaN, NaN, NaN, NaN, NaN)
+    return mr_output(m, θ_est, θ_se_est, θ_ci_low, θ_ci_high, p)
 end
 

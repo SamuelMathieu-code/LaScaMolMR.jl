@@ -3,6 +3,7 @@ using DLMReader
 using SnpArrays
 using Base.Threads
 using ThreadPools
+using Statistics
 
 
     ########################
@@ -41,6 +42,7 @@ function NaiveCis(data::GroupBy, GenotypesArr::AVSD where AVSD <: AbstractVector
 
     # for outputs
     outputArr = Array{Float64}(undef, length(eachgroup(data)), NOut * length(mr_methodsV))
+    # f_arr = Array{Float64}(undef, length(eachgroup(data)), 3)
     exposureNamesV = Vector{String}(undef, length(eachgroup(data)))
 
     # MR pipeline for each exposure
@@ -70,20 +72,25 @@ function NaiveCis(data::GroupBy, GenotypesArr::AVSD where AVSD <: AbstractVector
             end
         end
         
-        β_out, β_exp, se_out = ivs_d.β_out.val, ivs_d.β_exp.val, ivs_d.se_out.val
+        β_out, β_exp, se_out, se_exp = ivs_d.β_out.val, ivs_d.β_exp.val, ivs_d.se_out.val, ivs_d.se_exp.val
+        # f_v = abs2.(β_exp)./abs2.(se_exp)
+        # f_med = Statistics.median(f_v)
+        # f_min, f_max = extrema(f_v)
         # make mr methods and write ouput in dataset
         @threads for (j, mr_method) in collect(enumerate(mr_methodsV))
             if size(ivs_d, 1) ≥ 1
-                res = mr_method(β_out, se_out, β_exp, α)
+                res = mr_method(β_out, se_out, β_exp, se_exp, α)
             else
                 res = mr_output(0, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN)
             end
             outputArr[i, (NOut * (j - 1) + 1):(NOut * j)] = [getproperty(res, field) for field in mr_output_fields] # badly optimized => think of a rapper of optmized version for users?
         end
         exposureNamesV[i] = data_group.trait[1]
+        # f_arr[i, :] = [f_min, f_max, f_med] # F stat for ivs (exposure association force)
     end
     mr_names = [mrNamesDict[mr_methodsV[div(x, NOut, RoundUp)]] for x in 1:(NOut * length(mr_methodsV))]
     fields = repeat(collect(string.(fieldnames(mr_output))), length(mr_methodsV))
+    # header = ["exposure_name"; mr_names .* fields; "f_min_iv"; "f_max_iv"; "f_med_ivs"]
     header = ["exposure_name"; mr_names .* fields]
     
     return Dataset([exposureNamesV outputArr], header)
@@ -134,11 +141,11 @@ function NaiveCis2(data::GroupBy, GenotypesArr::AVSD where AVSD <: AbstractVecto
             end
         end
         
-        β_out, β_exp, se_out = ivs_d.β_out.val, ivs_d.β_exp.val, ivs_d.se_out.val
+        β_out, β_exp, se_out, se_exp = ivs_d.β_out.val, ivs_d.β_exp.val, ivs_d.se_out.val, ivs_d.se_exp.val
         # make mr methods and write ouput in dataset
         for (j, mr_method) in enumerate(mr_methodsV)
             if size(ivs_d, 1) ≥ 1
-                res = mr_method(β_out, se_out, β_exp, α)
+                res = mr_method(β_out, se_out, β_exp, se_exp, α)
             else
                 res = mr_output(0, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN)
             end
@@ -203,7 +210,7 @@ function NaiveCis3(data::GroupBy, GenotypesArr::AVSD where AVSD <: AbstractVecto
         # make mr methods and write ouput in dataset
         for (j, mr_method) in enumerate(mr_methodsV)
             if size(ivs_d, 1) ≥ 1
-                res = mr_method(β_out, se_out, β_exp, se_exp , α)
+                res = mr_method(β_out, se_out, β_exp, se_exp, α)
             else
                 res = mr_output(0, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN)
             end

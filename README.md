@@ -43,16 +43,10 @@ LaScaMol.jl is a distrbuted Mendelian Randomization (MR) package that is focused
 
 ## TODO
 
-- [ ] Implement & test NaiveCis.jl
-    - [ ] Write unit test NaiveCis.jl
-- [ ] Implement & test ld.jl
-    - [x] test with real data in notebook and compare results with plink clumping
-    - [ ] Write unit ld.jl
-- [ ] Implement & test mrStudyCis.jl
-    - [x] Implement harmonisation & indels removal
-    - [x] test with real data in notebook
-    - [ ] Write unit test mrStudyCis.jl
 - [ ] Benchmarks
-    - [x] Benchmark NaiveCis, clump, mrStudyCis (test)
-    - [ ] Benchmark between @threads with collect(enumerate) and qthreads (NaiveCis.jl)
-- [x] Implement and **Test** weighted median
+    - [x] Benchmark NaiveCis Decode  (internal, external, external queued)
+    - [ ] Benchmark NaiveCis eQTLGen  (internal, external, external queued)
+    - [ ] Choose parallelism : internal/external/queued-external
+- [x] Benchmark allocations with clump and mr_xxxx   (views macro, .val, etc) and make modifs accordingly
+- [ ] Memory optimization : Remove outcome pvalue, exposition pval -> Float16, others -> Float32, Strings (Exp name) -> inlineStrings (read file) -> Pooled array (convert with modify!)
+
