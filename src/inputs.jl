@@ -12,33 +12,60 @@ macro exportinstances(enum)
 end
 
 
+"""
+Enum of different information present in qtl file path or inside QTL/GWAS text delimited files.
+
+```
+TRAIT_NAME  # Name of the trait (e.g. QTL protein name)
+CHR         # chromosome
+POS         # position in chromosome
+A_EFFECT    # effect allele of SNP
+A_OTHER     # reference allele of SNP
+BETA        # effect size of SNP
+SE          # standard error of effect size
+PVAL        # Pvalue for H₀ : BETA = 0
+```
+"""
 @enum GenVarInfo begin
-    TRAIT_NAME
-    CHR
-    POS
-    A_EFFECT
-    A_OTHER
-    BETA
-    SE
-    PVAL
+    TRAIT_NAME  # Name of the trait (e.g. QTL protein name)
+    CHR         # chromosome
+    POS         # position in chromosome
+    A_EFFECT    # effect allele of SNP
+    A_OTHER     # reference allele of SNP
+    BETA        # effect size of SNP
+    SE          # standard error of effect size
+    PVAL        # Pvalue for H₀ : BETA = 0
 end
 
 @exportinstances GenVarInfo
-
-QtlPathPattern = Union{GenVarInfo, String}
-
-promote_rule(::Type{S}, ::Type{T}) where {S <: QtlPathPattern, T <: QtlPathPattern} = QtlPathPattern
 
 
 ###################################################
 #                      Inputs                     #
 ###################################################
 
-mutable struct GWAS{T <: Integer}
-    path::String
+"""
+Type GWAS which contains informations about GWAS file
+
+```
+path        # path to file
+columns     # Dictionary of informations contained in columns of file 
+separator   # column separator
+trait_name  # name of the trait (optional)
+```
+## Example
+
+```
+gwas = GWAS("path/to/file", 
+            Dict(1 => PVAL, 2 => CHR, 3 => POS, 8 => BETA, 9 => SE),
+            ',')
+```
+"""
+mutable struct GWAS{T <: Integer, S <: AbstractString}
+    path::S
     columns::Union{Dict{T, GenVarInfo}}
     separator::Union{Char, Vector{Char}}
-    trait_name::Union{Nothing, String} 
+    trait_name::Union{Nothing, S} 
 end
 
 GWAS(path,
@@ -46,6 +73,9 @@ GWAS(path,
      separator) = GWAS(path, columns, separator, nothing)
 
 
+"""
+Type QTLStudy which contains informations about QTL file(s) format and implacement
+"""
 mutable struct QTLStudy
     path_v::Vector{S1} where S1 <: Union{Missing, AbstractString}
     traits_for_each_path::Vector{SN} where SN <: Union{String, Missing, Nothing}
@@ -71,8 +101,64 @@ QTLStudy(path::String,
     separator::Union{Char, AbstractVector{Char}}) = QTLStudy([path], [nothing], trait_v, chr_v, tss_v, columns, separator)
 
 
-function QTLStudy_from_pattern(folder::String,
-    path_pattern::Vector, 
+"""
+Make QTLStudy which contains informations about QTL file(s) format and implacement from some file pattern
+
+arguments :
+
+`folder` is the main folder cntaining all QTL files. \\
+`path_pattern` is a vector of strngs and GenVarInfo characterizing the pattern of every file name in the folder. \\
+`trait_v` is an collection of traits that should be incuded in future analysis. \\
+`chr_v` is a vector of each chromosome of each QTL trait. \\
+`tss_v` is a vector of every Transcription start site. \\
+`columns` is a dictionary of all informations contained in columns of QTL files. \\
+`separator` is the separator of QTL files. \\
+`only_corresp_chr` indicates if only variants on chromosome correspoding to QTL trait should be kept. Default is `true`
+
+TIP : if your file contains a chromosome:position column (e.g. 1:324765), consider setting your separator to `[':', sep]`
+
+## Examples
+
+for a sigle file QTL :
+
+```
+QTLStudy_from_pattern("some/folder", ["qtl.txt"], tv, cv, tssv,
+                      Dict(1 => CHR, 2 => POS, 8 => PVAL, ...),
+                      separator = ' ',
+                      only_corresp_chr = true)
+```
+
+for this arhitecture (in UNIX) :
+
+```
+test/data
+├── exposureA
+│   ├── exposureA_chr1.txt
+│   └── exposureA_chr2.txt
+├── exposureB
+│   ├── exposureB_chr1.txt
+│   └── exposureB_chr2.txt
+└── exposureC
+    ├── exposureC_chr3.txt
+    └── exposureC_chr4.txt
+```
+
+we get this code :
+
+```
+path_pattern = ["exposure", TRAIT_NAME, "/exposure", TRAIT_NAME, "_chr", CHR, ".txt"]
+trait_v = ["A", "B", "C"]
+chr_v = [1, 2, 3]
+tss_v = [45287, 984276, 485327765]
+
+qtl = QTLStudy_from_pattern("test/data", path_pattern, ttrait_v, chr_v, tss_v,
+                            Dict(1 => CHR, 2 => POS, 8 => PVAL, ...),
+                            separator = ' ',
+                            only_corresp_chr = true)
+```
+"""
+function QTLStudy_from_pattern(folder::AbstractString,
+    path_pattern::AbstractVector, 
     trait_v, 
     chr_v, 
     tss_v, 

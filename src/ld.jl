@@ -20,196 +20,140 @@ end
 
 ############ LD calculations ############
 
-"""
-LD r² composite of pair of SNPs
-"""
-function ld_r²(snp1::Vector{UInt8}, snp2::Vector{UInt8})::Float64
-    # drop missing values
-    idx = (snp1 .!= @MISSING) .& (snp2 .!= @MISSING)
-    s1, s2 = snp1[idx], snp2[idx]
-    
-    # number of not missing samples
-    n = length(idx)
+
+# LD r² composite of pair of SNPs
+@inline function ld_r²(s1, s2)::Float64
+    n = 0
     
     # calculate needed frequencies
     naa = naA = nAA = nbb = nbB = nBB =
 		nAABB = naabb = naaBB = nAAbb = 0
 
-    for (g1, g2) in zip(s1, s2)
+    @inbounds @simd for i in eachindex(s1, s2)
+        g1, g2 = s1[i], s2[i]
         if  g1 == @HOMO_M
-            nAA +=1
             if g2 == @HOMO_M # AABB
                 nBB +=1
                 nAABB +=1
+                n += 1
+                nAA +=1
             elseif g2 == @HOMO_m # AAbb
                 nbb +=1
                 nAAbb +=1
-            else    #HETER -> AAbB
+                n += 1
+                nAA +=1
+            elseif g2 == @HETER    #HETER -> AAbB
                 nbB +=1
+                n += 1
+                nAA +=1
             end
         elseif g1 == @HOMO_m
-            naa +=1
             if g2 == @HOMO_M # aaBB
                 nBB +=1
                 naaBB +=1
+                n += 1
+                naa +=1
             elseif g2 == @HOMO_m  # aabb
                 nbb +=1
                 naabb +=1
-            else    # HETER -> aabB
+                n += 1
+                naa +=1
+            elseif g2 == @HETER    # HETER -> aabB
                 nbB +=1
+                n += 1
+                naa +=1
             end
-        else # @HETER
-            naA +=1
+        elseif g1 == @HETER # @HETER
             if g2 == @HOMO_M # aABB
                 nBB +=1
+                n += 1
+                naA +=1
             elseif g2 == @HOMO_m # aAbb
                 nbb+=1
-            else    # HETER -> aAbB
+                n += 1
+                naA +=1
+            elseif g2 == @HETER    # HETER -> aAbB
                 nbB +=1
+                n += 1
+                naA +=1
             end
         end
     end
 
     # final calculations
-    Δ = (nAABB + naabb - naaBB - nAAbb) / (2*n) - 
-        (naa-nAA)*(nbb-nBB) / (2*n*n)
-    
-    pa = (2*naa + naA) / (2*n)
-    pb = (2*nbb + nbB) / (2*n)
-    pA = 1 - pa
-    pB = 1 - pb
-    pAA = nAA / n
-    pBB = nBB / n
-    DA = pAA - pA*pA
-    DB = pBB - pB*pB
-    t = (pA*pa + DA) * (pB*pb + DB)
+    @fastmath begin
+        Δ = (nAABB + naabb - naaBB - nAAbb) / (2*n) - 
+            (naa-nAA)*(nbb-nBB) / (2*n*n)
+        
+        pa = (2*naa + naA) / (2*n)
+        pb = (2*nbb + nbB) / (2*n)
+        pA = 1 - pa
+        pB = 1 - pb
+        pAA = nAA / n
+        pBB = nBB / n
+        DA = pAA - pA*pA
+        DB = pBB - pB*pB
+        t = (pA*pa + DA) * (pB*pb + DB)
 
-    return Δ^2 / t
+        r = Δ^2 / t
+    end
 
+    return r
 end
 
 
 """
-LD r² composite matrix of n SNPs from index in SnpArray
-"""
-function mat_r²(arr::SnpArray, idx::AbstractVector{Int})::Matrix{Float64}
-    M_corr = Matrix{Float64}(I, length(idx), length(idx))
-    
-    d = Dict(zip(idx, 1:lastindex(idx)))
-    @threads for (i, j) in collect(subsets(idx, 2))
-        snp1 = arr[:,i]
-        snp2 = arr[:,j]
-        M_corr[d[i], d[j]] = M_corr[d[j], d[i]] = ld_r²(snp1, snp2) #function implemented following paper pmid :18757931, for r² type r\^2
-    end
-    return M_corr
-end
-
-function mat_r²_2(arr::SnpArray, idx::AbstractVector{Int})::Matrix{Float64}
-    M_corr = Matrix{Float64}(I, length(idx), length(idx))
-    
-    d = Dict(zip(idx, 1:lastindex(idx)))
-    for (i, j) in subsets(idx, 2)
-        snp1 = arr[:,i]
-        snp2 = arr[:,j]
-        M_corr[d[i], d[j]] = M_corr[d[j], d[i]] = ld_r²(snp1, snp2) #function implemented following paper pmid :18757931, for r² type r\^2
-    end
-    return M_corr
-end
-
-function mat_r²_3(arr::SnpArray, idx::AbstractVector{Int})::Matrix{Float64}
-    M_corr = Matrix{Float64}(I, length(idx), length(idx))
-    
-    d = Dict(zip(idx, 1:lastindex(idx)))
-    @threads :static for (i, j) in collect(subsets(idx, 2))
-        snp1 = arr[:,i]
-        snp2 = arr[:,j]
-        M_corr[d[i], d[j]] = M_corr[d[j], d[i]] = ld_r²(snp1, snp2) #function implemented following paper pmid :18757931, for r² type r\^2
-    end
-    return M_corr
-end
-
-
-"""
-Get correlation Matrix for specifies snps (tuple of the form (chr, pos) 
-    given reference genotype SnpData.
-"""
-function getLDmat(ref_genotypes::SnpData, 
-                  snps::AbstractVector{Tuple{Any, Any}}
-                  )::Tuple{Matrix{Float64}, Vector{Bool}}
-
-    snps_indx = Vector{Union{Int}}(undef, size(snps, 1))
-    @threads for (i, chr_pos_sing) in collect(enumerate(snps))
-        local j = searchsortedfirst(ref_genotypes.snp_info.chr_pos, chr_pos_sing)
-        if j > length(ref_genotypes.snp_info.chr_pos) || ref_genotypes.snp_info.chr_pos[j] != chr_pos_sing
-            j = -1
-        end
-        snps_indx[i] = j
-    end
-    kept_indx = snps_indx[snps_indx .> 0]
-
-    return mat_r²(ref_genotypes.snparray, kept_indx), snps_indx .> 0
-end
-
-
-function getLDmat(ref_genotypes::SnpData, 
-    snps::AbstractVector{Tuple{T1, T2}} where T1 where T2
-    )::Vector{Bool}
-    return getLDmat(ref_genotypes, Vector{Tuple{Any, Any}}(snps))
-end
-
-function getLDmat2(ref_genotypes::SnpData, 
-    snps::AbstractVector{Tuple{Any, Any}}
-    )::Tuple{Matrix{Float64}, Vector{Bool}}
-
-    snps_indx = Vector{Union{Int}}(undef, size(snps, 1))
-    for (i, chr_pos_sing) in enumerate(snps)
-        local j = searchsortedfirst(ref_genotypes.snp_info.chr_pos, chr_pos_sing)
-        if j > length(ref_genotypes.snp_info.chr_pos) || ref_genotypes.snp_info.chr_pos[j] != chr_pos_sing
-            j = -1
-        end
-        snps_indx[i] = j
-    end
-    kept_indx = snps_indx[snps_indx .> 0]
-
-    return mat_r²_2(ref_genotypes.snparray, kept_indx), snps_indx .> 0
-end
-
-function getLDmat3(ref_genotypes::SnpData, 
-    snps::AbstractVector{Tuple{Any, Any}}
-    )::Tuple{Matrix{Float64}, Vector{Bool}}
-
-snps_indx = Vector{Union{Int}}(undef, size(snps, 1))
-@threads :static for (i, chr_pos_sing) in collect(enumerate(snps))
-local j = searchsortedfirst(ref_genotypes.snp_info.chr_pos, chr_pos_sing)
-if j > length(ref_genotypes.snp_info.chr_pos) || ref_genotypes.snp_info.chr_pos[j] != chr_pos_sing
-j = -1
-end
-snps_indx[i] = j
-end
-kept_indx = snps_indx[snps_indx .> 0]
-
-return mat_r²_3(ref_genotypes.snparray, kept_indx), snps_indx .> 0
-end
-
-
-
-"""
-Implementation of the clumping algoritm prioritising first snps in given Vector and formated Genotypes SnpData (see formatSnpData!)
+threaded implementation of the clumping algorithm prioritising first snps in given Vector and formated Genotypes SnpData (see formatSnpData!)
     returns a vector of booean indication if each given snp is kept
+
+arguments :
+
+ref_genotypes : reference SnpData ([SnpArrays](https://github.com/OpenMendel/SnpArrays.jl)) \\
+snps : vector of chromosome position tuple for each variant
+
+options : 
+
+r2_tresh : r² treshold under which snps are not considered correlated. Default is 0.1 \\
+formated : ref_genotypes already formated (see [`formatSnpData!`](@ref))
+
+returns : 
+
+an array of same length as snps that indicates true for kept snps and false otherwise.
 """
 function clump(ref_genotypes::SnpData, 
-               snps::AbstractVector{Tuple{Any, Any}}, 
-               r2_tresh::Float64 = 0.1
+               snps::AbstractVector{<:Tuple{Integer, Integer}}; 
+               r2_tresh::AbstractFloat = 0.1,
+               formated = false
                )::Vector{Bool}
     
-    r2_mat, indx_v_b = getLDmat(ref_genotypes, snps)
-    idx_on_mat = accumulate(+, indx_v_b)
+    if !formated
+        formatSnpData!(ref_genotypes)
+    end
+
+    # search for indices of given snps
+    snps_indx = Vector{Int}(undef, size(snps, 1)) # indices 
+    indx_v_b = Vector{Bool}(undef, size(snps, 1)) # found or not
+    @threads for (i, chr_pos_sing) in collect(enumerate(snps))
+        j = searchsortedfirst(ref_genotypes.snp_info.chr_pos, chr_pos_sing)
+        @inbounds begin 
+            indx_v_b[i] = firstindex(ref_genotypes.snp_info.chr_pos) ≤ j ≤ lastindex(ref_genotypes.snp_info.chr_pos) && 
+                          ref_genotypes.snp_info.chr_pos[j] == chr_pos_sing
+            if indx_v_b[i]
+                snps_indx[i] = ref_genotypes.snp_info.idx[j]
+            end
+        end
+    end
+
     
     for i in 1:(lastindex(snps)-1)
-        if indx_v_b[i]
-            @threads for j in (i+1):lastindex(snps)
-                if r2_mat[idx_on_mat[i], idx_on_mat[j]] > r2_tresh
-                    indx_v_b[j] = false
+        if @inbounds(indx_v_b[i])
+            @threads for j in i+1:lastindex(snps)
+                @inbounds if indx_v_b[j]
+                    s1 = @view ref_genotypes.snparray[:, snps_indx[i]]
+                    s2 = @view ref_genotypes.snparray[:, snps_indx[j]]
+                    if ld_r²(s1, s2) > r2_tresh
+                            indx_v_b[j] = false
+                    end
                 end
             end
         end
@@ -218,56 +162,6 @@ function clump(ref_genotypes::SnpData,
     return indx_v_b
 end
 
-
-function clump(ref_genotypes::SnpData, 
-    snps::AbstractVector{Tuple{T1, T2}} where T1 where T2, 
-    r2_tresh::Float64 = 0.1
-    )::Vector{Bool}
-    return clump(ref_genotypes, Vector{Tuple{Any, Any}}(snps), r2_tresh)
-end
-
-function clump2(ref_genotypes::SnpData, 
-                snps::AbstractVector{Tuple{Any, Any}}, 
-                r2_tresh::Float64 = 0.1
-                )::Vector{Bool}
-
-    r2_mat, indx_v_b = getLDmat2(ref_genotypes, snps)
-    idx_on_mat = accumulate(+, indx_v_b)
-
-    for i in 1:(lastindex(snps)-1)
-        if indx_v_b[i]
-            for j in (i+1):lastindex(snps)
-                if r2_mat[idx_on_mat[i], idx_on_mat[j]] > r2_tresh
-                    indx_v_b[j] = false
-                end
-            end
-        end
-    end
-
-    return indx_v_b
-end
-
-
-function clump3(ref_genotypes::SnpData, 
-    snps::AbstractVector{Tuple{Any, Any}}, 
-    r2_tresh::Float64 = 0.1
-    )::Vector{Bool}
-
-    r2_mat, indx_v_b = getLDmat3(ref_genotypes, snps)
-    idx_on_mat = accumulate(+, indx_v_b)
-
-    for i in 1:(lastindex(snps)-1)
-        if indx_v_b[i]
-            @threads for j in (i+1):lastindex(snps)
-                if r2_mat[idx_on_mat[i], idx_on_mat[j]] > r2_tresh
-                    indx_v_b[j] = false
-                end
-            end
-        end
-    end
-
-    return indx_v_b
-end
 
 """
 format Genotype information contained in SnpData for optimised snp search based on chromosome position.
@@ -275,11 +169,15 @@ Adds a column of tuple (chr::Int8, pos::Int) in snp_info and sorts snp_info acco
     returns nothing
 """
 function formatSnpData!(Genotypes::SnpData)
-    Genotypes.snp_info.idx = collect(1:size(Genotypes.snp_info, 1))
-    Genotypes.snp_info.chr_pos = collect(
-            zip(parse.(Int8, Genotypes.snp_info.chromosome), 
-                Genotypes.snp_info.position)
-        )
+    if !hasproperty(Genotypes.snp_info, :idx)
+        Genotypes.snp_info.idx = collect(1:size(Genotypes.snp_info, 1))
+    end
+    if !hasproperty(Genotypes.snp_info, :chr_pos)
+        Genotypes.snp_info.chr_pos = collect(
+                zip(parse.(Int8, Genotypes.snp_info.chromosome), 
+                    Genotypes.snp_info.position)
+            )
+    end
     sort!(Genotypes.snp_info, :chr_pos)
 end
 

@@ -6,6 +6,8 @@ using Folds
 using Chain
 using ThreadPools
 using StatsBase
+using InlineStrings
+using PooledArrays
 
     ########################
     #       Constants      #
@@ -74,8 +76,10 @@ function verify_and_simplify_columns!(exposure::Union{QTLStudy, GWAS})
         if trait_each_path_nothing && !(TRAIT_NAME in values(exposure.columns))
             throw(ArgumentError("exposure misses TRAIT_NAME information"))
         end
+        gen_infos = [CHR, POS, BETA, SE, A_EFFECT, A_OTHER, PVAL, TRAIT_NAME]
     else
         trait_each_path_nothing = false
+        gen_infos = [CHR, POS, BETA, SE, A_EFFECT, A_OTHER]
     end
 
     # Treating exposure
@@ -85,13 +89,13 @@ function verify_and_simplify_columns!(exposure::Union{QTLStudy, GWAS})
                    POS => 0,
                    BETA => 0,
                    SE => 0,
-                   PVAL => 0,
+                   PVAL => (exposure isa GWAS) ? 1 : 0,
                    A_EFFECT => 0,
                    A_OTHER => 0,
                    TRAIT_NAME => (!trait_each_path_nothing) ? 1 : 0)
 
     for key in keys(exposure.columns)
-        for info in [CHR, POS, BETA, SE, A_EFFECT, A_OTHER, PVAL, TRAIT_NAME]
+        for info in gen_infos
             if exposure.columns[key] == info
                 cols_ok[info] = 1
                 new_cols_exposure[key] = info
@@ -115,14 +119,23 @@ function read_filter_file(file::GWAS,
                           in_window::Function, 
                           header::Vector{Symbol}, 
                           types::Dict{Int, DataType})::Dataset
-
-    d = filereader(file.path, delimiter = file.separator, 
-                           header = header, types = types, skipto=2, 
-                           makeunique=true, eolwarn=false, threads = threads)[:,collect(keys(file.columns))]
+    d = try
+        filereader(file.path, delimiter = file.separator, 
+                    header = header, types = types, skipto=2, 
+                    makeunique=true, eolwarn=false, threads = threads)[:,collect(keys(file.columns))]
+    catch e
+        if e isa ArgumentError
+            throw(ArgumentError("Make sure file does not contain idels or exposure names loger than 63 in $(file.path)"))
+        else
+            throw(e)
+        end
+    end
             
     if add_trait_name_b
         d.trait = repeat([file.trait_name], nrow(d))
     end
+
+    modify!(d, :trait => PooledArray, [:a_effect_exp, :a_other_exp] .=> (PooledArray ∘ (x -> lowercase.(x))))
     
     if trsf_log_pval !== nothing
         modify!(d, :pval_exp => trsf_log_pval, threads = threads)
@@ -137,7 +150,7 @@ function read_filter_file(file::GWAS,
         end
     end
     
-    return modify(d, [:a_effect_exp, :a_other_exp] => x -> lowercase.(x), threads = threads)
+    return d
 end
 
 
@@ -214,15 +227,24 @@ function mrStudyCis(exposure::QTLStudy,
     #gwas_data
     verify_and_simplify_columns!(outcome)
     types, header = make_types_and_headers(outcome)
-    gwas_d = filereader(outcome.path, 
-                        delimiter = outcome.separator, 
-                        header = header, types = types, skipto=2, 
-                        makeunique=true, eolwarn=false)[:,collect(keys(outcome.columns))]
+    gwas_d = try 
+        filereader(outcome.path, 
+                    delimiter = outcome.separator, 
+                    header = header, types = types, skipto=2, 
+                    makeunique=true, eolwarn=false)[:,collect(keys(outcome.columns))]
+    catch e
+        if e isa ArgumentError
+            throw(ArgumentError("Make sure file does not contain idels or exposure names loger than 63 in $(outcome.path)"))
+        else
+            throw(e)
+        end
+    end
     
+
     if trsf_pval_out !== nothing
         modify!(gwas_d, :pval => trsf_pval_out)
     end
-    modify!(gwas_d, [:a_effect_out, :a_other_out] => x -> lowercase.(x))
+    modify!(gwas_d, [:a_effect_out, :a_other_out] => (PooledArray ∘ x -> lowercase.(x)))
 
     biallelic(s::SubArray) = (s[1]==s[2] && s[3] == s[4]) || (s[1] == s[4] && s[2] == s[3])
     joined_d = @chain qtl_d begin
@@ -231,9 +253,8 @@ function mrStudyCis(exposure::QTLStudy,
         filter(:, by = !ismissing)
     end
 
-    joined_d.chr_pos = collect(zip(joined_d.chr, joined_d.pos))
-
     if approach == "strict"
+        joined_d.chr_pos = collect(zip(joined_d.chr, joined_d.pos))
         counts = countmap(joined_d.chr_pos)
         is_unique_iv(s) = counts[s] == 1
         filter!(joined_d, :chr_pos, by = is_unique_iv)
