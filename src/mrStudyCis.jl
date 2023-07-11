@@ -6,7 +6,6 @@ using Folds
 using Chain
 using ThreadPools
 using StatsBase
-using InlineStrings
 using PooledArrays
 
     ########################

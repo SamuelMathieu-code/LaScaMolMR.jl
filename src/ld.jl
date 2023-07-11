@@ -103,8 +103,8 @@ end
 
 
 """
-threaded implementation of the clumping algorithm prioritising first snps in given Vector and formated Genotypes SnpData (see formatSnpData!)
-    returns a vector of booean indication if each given snp is kept
+threaded implementation of the clumping algorithm prioritising first snps in given Vector and formated Genotypes SnpData (see [`formatSnpData!`](@ref))
+    returns a vector of boolean indicating if each given snp is kept
 
 arguments :
 
@@ -113,12 +113,31 @@ snps : vector of chromosome position tuple for each variant
 
 options : 
 
-r2_tresh : r² treshold under which snps are not considered correlated. Default is 0.1 \\
-formated : ref_genotypes already formated (see [`formatSnpData!`](@ref))
+`formated` : indicates if ref SnpData is already formated according to :chr_pos (chr, pos)\\
+`r2_tresh` : minimal r² for 2 snps to be considered strongly correlated.
 
-returns : 
+## Examples :
 
-an array of same length as snps that indicates true for kept snps and false otherwise.
+```julia
+julia> ref = SnpData(datadir("some/data"));
+
+julia> kept_v_b::Vector{Bool} = clump([(1, 123), (1, 456), (1, 789)], ref)
+3-element Vector{Int64}:
+ 1
+ 0
+ 1
+
+julia> formatSnpData!(ref);
+
+julia> kept_v_b::Vector{Bool} = clump([(1, 123), (1, 456), (1, 789)], ref, formated = true)
+3-element Vector{Int64}:
+ 1
+ 0
+ 1
+```
+
+If formatSnpData has already been called on good snp info type (`:chr_pos` or `:snpid`), `formated = true` option does not verify or modify formating.
+See [`formatSnpData!`](@ref).
 """
 function clump(ref_genotypes::SnpData, 
                snps::AbstractVector{<:Tuple{Integer, Integer}}; 
@@ -167,6 +186,17 @@ end
 format Genotype information contained in SnpData for optimised snp search based on chromosome position.
 Adds a column of tuple (chr::Int8, pos::Int) in snp_info and sorts snp_info accordingly.
     returns nothing
+
+## Examples
+
+```julia
+ref = SnpData(datadir("some/data"))
+
+formatSnpData!(ref)
+```
+
+Note this function does not take into account the user might want to write SnpData in bed, bim, fam format. 
+    The changes done by this function can and will cause problems if writing plink files after calling `formatSnpData!`.
 """
 function formatSnpData!(Genotypes::SnpData)
     if !hasproperty(Genotypes.snp_info, :idx)

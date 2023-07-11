@@ -12,7 +12,8 @@ using Statistics
 
 const mrNamesDict = Dict(mr_egger => "Egger_",
                    mr_ivw => "IVW_",
-                   mr_wald => "Wald_ratio_")
+                   mr_wald => "Wald_ratio_",
+                   mr_wm => "Weighted_median_")
 
 const mr_output_fields = fieldnames(mr_output)
 
@@ -96,7 +97,19 @@ function NaiveCis(data::GroupBy, GenotypesArr::AbstractVector{SnpData};
         exposureNamesV[i] = data_group.trait[1]
         f_arr[i, :] = [f_min, f_max, f_med] # F stat for ivs (exposure association force)
     end
-    mr_names = [mrNamesDict[mr_methodsV[div(x, NOut, RoundUp)]] for x in 1:(NOut * length(mr_methodsV))]
+
+    # make header
+    ncol = NOut*length(mr_methodsV)
+    mr_names = Vector{String}(undef, ncol)
+    @inbounds for i in 1:ncol
+        n = mr_methodsV[div(i, NOut, RoundUp)]
+        if haskey(mrNamesDict, n)
+            mr_names[i] = mrNamesDict[n]
+        else
+            mr_names[i] = string(n)
+        end
+    end
+
     fields = repeat(collect(string.(fieldnames(mr_output))), length(mr_methodsV))
     header = ["exposure_name"; mr_names .* fields; "f_min_iv"; "f_max_iv"; "f_med_ivs"]
     
