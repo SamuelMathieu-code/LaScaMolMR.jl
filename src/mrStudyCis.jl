@@ -257,20 +257,27 @@ Perform a Mendelian Randomization study with exposure QTL and outcome GWAS
     (see [SnpArrays documentation](https://openmendel.github.io/SnpArrays.jl/latest/))\\
 
 **options : **
-`approach::String`: name of MR study aproach chosen (either naive, test or strict) \\
-`p_tresh::Float64`: pvalue threshold for a SNP to be considered associated to an exposure \\
-`window::Integer`: maximal distance between a potential Instrument Variable and transciption start site of gene exposure  \\
-`r2_tresh::Float64`: maximial corrlation between to SNPs\\
-`exposure_filtered::Bool` : \\
-`mr_methods::AbstractVector{Function}`\\
-`α::Float64`\\
-`trsf_pval_exp::Union{Function, Nothing}` \\
-`trsf_pval_out::Union{Function, Nothing}` \\
-`low_ram::Bool`
+`approach::String`: name of MR study aproach chosen (either naive, test or strict) (default is "naive")\\
+`p_tresh::Float64`: pvalue threshold for a SNP to be considered associated to an exposure (default is 1e-3)\\
+`window::Integer`: maximal distance between a potential Instrument Variable and transciption start site of gene exposure (default is 500_000)\\
+`r2_tresh::Float64`: maximial corrlation between to SNPs (default is 0.1)\\
+`exposure_filtered::Bool` : If true, the exposure files are considered already filtered will not filtered 
+    on distance to tss and level of significance (default is false)\\
+`mr_methods::AbstractVector{Function}` : Functions to use to estimate effect of exposure on outcome.
+    Any Function taking four vectors of same length (βoutcome, se_outcome, βexposure, se_exposure) and a Float (α) 
+    and returns a value of type [`mr_output`](@ref) can be used, that includes user defined functions. 
+    Functions already implemented in this module include [`mr_ivw`](@ref), [`mr_egger`](@ref), [`mr_wm`](@ref) and [`mr_wald`](@ref). default value is `[mr_ivw, mr_egger]` \\
+`α::Float64` : α value for confidance intervals of parameter estimations in MR (e.g. 95% CI is α = 0.05, which is the default value)\\
+`trsf_pval_exp::Union{Function, Nothing}` : Transformation to apply to pvalues in exposure dataset\\
+`trsf_pval_out::Union{Function, Nothing}` : t=Transormation to apply on pvalues in outcome dataset\\
+`low_ram::Bool` : If true, if the exposure files each contain only one exposure trait, [`mrStudyCisNFolds`](@ref) with n_folds of 10 will be used.
 
+## Examples
 
-..... TO BE COMPLETED ....
-"""
+```julia
+results = mrStudyCis(qtl, gwas, genotypes, 10, approach = "naive", window = 250000, trsf_pval_exp = x -> exp10.(x))
+```
+""" ### Trouver des meilleurs exemples.
 function mrStudyCis(exposure::QTLStudy, 
     outcome::GWAS, 
     bedbimfam_dirnames::AbstractArray{<:AbstractString};
@@ -294,8 +301,8 @@ function mrStudyCis(exposure::QTLStudy,
                 \nPay attention to Memory state." 
     end
 
-    # verify if one qtl file per exposure and low_ram -> treat each file separatly
-    if low_ram && l_unique_traits == length(qtl.path_v) && approach == "naive"
+    # verify if one qtl file per exposure and low_ram -> make folds to limit ram usage
+    if low_ram && l_unique_traits == length(qtl.path_v) && approach ∈ ["naive", "test"]
         return mrStudyCisNFolds(exposure, 
                                  outcome, 
                                  bedbimfam_dirnames,
@@ -357,9 +364,7 @@ function mrStudyCis(exposure::QTLStudy,
     #### for d in eachgroup(joined_d) -> Plink + MR (implemented in NaiveCis)
     if approach == "naive" || approach == "strict"
         return NaiveCis(groupby(joined_d, :trait, stable = false), GenotypesArr, r2_tresh = r2_tresh, one_file_per_chr_plink = one_file_per_chr_plink, mr_methodsV = mr_methods, α = α)
-    elseif approach == "test"
+    else approach == "test"
         return groupby(joined_d, :trait, stable = false)
-    else
-        throw(ArgumentError("approach should be either \"naive\", \"test\", \"strict\" or \"2ndChance\""))
     end
 end

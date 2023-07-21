@@ -25,13 +25,35 @@ const NOut = length(mr_output_fields)
 
 """
 Implmentation of naive approach for transcriptome wide MR
-    Returns a Dataset of results for each exposure (rows) and 
+    Returns a Dataset of results for each exposure (rows).
+
+**arguments :** 
+`data` : grouped dataset (exposure trait) with specific column names : 
+    `:trait`, `:chr`, `:pos`, `:β_exp`, `β_out`, `:se_exp`, `:se_out` among others. \\
+`GenotypesArr::AbstractVector{SnpData}` : Reference genotypes. (see [`SnpArrays`](https://github.com/OpenMendel/SnpArrays.jl))
+
+**options :**
+
+`one_file_per_chr_plink::Bool` : If true, it is considered that the each index in GenotypesArr corresponds to a chromosome number (default is true) \\
+`r2_tresh::AbstractFloat` : The maximal r² correlation coefficient for two snps to be considered independant. (default is 0.1) \\
+`mr_methodsV::AbstractVector{Function}`: Functions to use to estimate effect of exposure on outcome.
+    Any Function taking four vectors of same length (βoutcome, se_outcome, βexposure, se_exposure) and a Float (α) 
+    and returns a value of type [`mr_output`](@ref) can be used, that includes user defined functions. 
+    Functions already implemented in this module include [`mr_ivw`](@ref), [`mr_egger`](@ref), [`mr_wm`](@ref)
+    and [`mr_wald`](@ref). default value is `[mr_ivw, mr_egger]` \\
+`α:AbstractFloat` : α value for confidance intervals of parameter estimations in MR (e.g. 95% CI is α = 0.05, which is the default value)
+
+## Examples :
+
+```julia
+res_d = NaiveCis(d, GenotypesArr, r2_tresh = 0.1)
+```
 """
 function NaiveCis(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{SnpData}; 
                   one_file_per_chr_plink::Bool = true,
-                  r2_tresh::Float64 = 0.1,
+                  r2_tresh::AbstractFloat = 0.1,
                   mr_methodsV::AbstractVector{Function} = [mr_egger, mr_ivw],
-                  α::Float64 = 0.05
+                  α::AbstractFloat = 0.05
                   )::Dataset
 
     # Gestion of bedbimfam file sets

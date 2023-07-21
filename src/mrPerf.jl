@@ -91,9 +91,8 @@ struct mr_output
 end
 
 
-"""
-Default values constructor for mr_output with no heterogeneity stats
-"""
+
+# Default values constructor for mr_output with no heterogeneity stats
 function mr_output(n::Int, 
     effect::Float64 = NaN,
     se_effect::Float64 = NaN,
@@ -113,6 +112,14 @@ end
 """
 Wald ratio for Mendelian Randomization with a single instrumental variable
      y is outcome, x is exposure
+
+**arguments :**
+
+`β_Y` : outcome effect sizes
+`se_β_Y` : standard error of outcome effect size
+`β_X` : exposure effect size
+`α` : α value for confidence intervals (default is 0.05)
+
 """
 function mr_wald(β_Y::AbstractFloat, 
                  se_β_Y::AbstractFloat, 
@@ -128,6 +135,19 @@ function mr_wald(β_Y::AbstractFloat,
     return mr_output(1, θ, se_θ, ci_low, ci_high, p)
 end
 
+"""
+Wald ratio for Mendelian Randomization with a single instrumental variable
+     y is outcome, x is exposure
+
+**arguments :**
+
+`β_Y` : vector of outcome effect sizes
+`se_β_Y` : vector of standard error of outcome effect sizes
+`β_X` : vector of exposure effect sizes
+`se_β_X` : vector of standard error for exposure effect sizes
+`α` : α value for confidence intervals (default is 0.05)
+
+"""
 function mr_wald(β_y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
                  se_β_y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
                  β_x::AbstractVector{<: Union{AbstractFloat, Missing}}, 
@@ -142,6 +162,15 @@ Inverse variance weighted linear regression with simple weights (se(B_Y)^-2) Men
     Y is outcome, X is exposure
 
 currently waiting for GLM.jl PR#487 to be merged to use analytical weights instead of doing calculations twice...
+
+**arguments :**
+
+`β_Y` : vector of outcome effect sizes
+`se_β_Y` : vector of standard error of outcome effect sizes
+`β_X` : vector of exposure effect sizes
+`se_β_X` : vector of standard error for exposure effect sizes
+`α` : α value for confidence intervals (default is 0.05)
+
 """
 function mr_ivw(β_Y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
                 se_β_Y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
@@ -190,6 +219,15 @@ Egger Mendelian Randomization
     Y is outcome, X is exposure
 
 currently waiting for GLM.jl PR#487 to be merged to use analytical weights instead of doing calculations twice...
+
+**arguments :**
+
+`β_Y` : vector of outcome effect sizes
+`se_β_Y` : vector of standard error of outcome effect sizes
+`β_X` : vector of exposure effect sizes
+`se_β_X` : vector of standard error for exposure effect sizes
+`α` : α value for confidence intervals (default is 0.05)
+    
 """
 function mr_egger(β_Y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
                   se_β_Y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
@@ -245,12 +283,19 @@ end
 
 """
 Weighted Median Mendelian Randomization (Bowden et al., 2015)
-    Y is outcome, X is exposure
+    Y is outcome, X is exposure.
 
-arguments :
+**arguments :**
 
 `β_Y` : vector of outcome effect sizes
-`se_β_Y` : vector of 
+`se_β_Y` : vector of standard error of outcome effect sizes
+`β_X` : vector of exposure effect sizes
+`se_β_X` : vector of standard error for exposure effect sizes
+`α` : α value for confidence intervals (default is 0.05)
+
+**options :**
+`iterations` : number of iterations for estimate of standrard error or effect size.
+`seed` : seed of random generator
 """
 function mr_wm(β_Y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
                se_β_Y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
