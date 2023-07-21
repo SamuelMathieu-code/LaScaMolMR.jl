@@ -44,6 +44,7 @@ const GenVarInfo_Symbols_out = Dict(TRAIT_NAME => :trait_out_,
     #     utils funcs      #
     ########################
 
+# make a vector of header symbol for QTLStudy/GWAS and a dictionary of types to pass to DLMReader
 function make_types_and_headers(file::Union{QTLStudy, GWAS})::Tuple{Dict{Int, DataType}, Vector{Symbol}}
     types::Dict{Int, DataType} = Dict()
     n_cols_file::Int = 0
@@ -67,7 +68,7 @@ function make_types_and_headers(file::Union{QTLStudy, GWAS})::Tuple{Dict{Int, Da
     return types, header
 end
 
-
+# verify columns make sense and simplify repeating elements (modifies the columns field of QTLStudy/GWAS)
 function verify_and_simplify_columns!(exposure::Union{QTLStudy, GWAS})
 
     if exposure isa QTLStudy
@@ -110,6 +111,8 @@ function verify_and_simplify_columns!(exposure::Union{QTLStudy, GWAS})
     exposure.columns = new_cols_exposure
 end
 
+
+# read all exposure files and filter for in window and pvalue treshold
 function read_filter_file(file::GWAS, 
                           add_trait_name_b::Bool, 
                           threads::Bool, 
@@ -118,17 +121,10 @@ function read_filter_file(file::GWAS,
                           in_window::Function, 
                           header::Vector{Symbol}, 
                           types::Dict{Int, DataType})::Dataset
-    d = try
-        filereader(file.path, delimiter = file.separator, 
+    
+    d = filereader(file.path, delimiter = file.separator, 
                     header = header, types = types, skipto=2, 
                     makeunique=true, eolwarn=false, threads = threads)[:,collect(keys(file.columns))]
-    catch e
-        if e isa ArgumentError
-            throw(ArgumentError("Make sure file does not contain idels or exposure names loger than 63 in $(file.path)"))
-        else
-            throw(e)
-        end
-    end
             
     if add_trait_name_b
         d.trait = repeat([file.trait_name], nrow(d))
@@ -153,6 +149,7 @@ function read_filter_file(file::GWAS,
 end
 
 
+# read all qtl files and concatenate them into a single Dataset
 function read_qtl_files(exposure::QTLStudy,
     types::Dict{Int, DataType}, 
     header::Vector{Symbol},
@@ -176,7 +173,7 @@ function read_qtl_files(exposure::QTLStudy,
 
     add_trait_name_b = !(TRAIT_NAME in values(exposure.columns))
 
-    if Base.Threads.nthreads() > length(exposure) ### Case when nore threads than files -> read each file in //
+    if Base.Threads.nthreads() > length(exposure) ### Case when nore threads than files -> read each file in // --> could it be always more efficient?
         for i in 1:lastindex(data_vect)
             file = exposure[i]
             data_vect[i] = read_filter_file(file, add_trait_name_b, true, filtered, trsf_log_pval, in_window, header, types)
@@ -198,53 +195,141 @@ end
     #      MrStudyCis       #
     #########################
 
+# low memory version valid if one file per exposure in QTLStudy
+"""
+Perform mendelian randomization study from QTL to GWAS and separating exposure in n folds to avoid loading full dataset in memory. 
+    (works if separated in multiple files only) This may be slightly slower than mrStudyCis.
+
+**arguments :**
+
+`exposure::QTLStudy` : exposure QTL data \\
+`outcome::GWAS` : outcome gas data \\
+`bedbimfam_dirnames::AbstractArray{<:AbstractString}` : base names of Plink bedbimfam files for reference genotypes 
+    (see [SnpArrays documentation](https://openmendel.github.io/SnpArrays.jl/latest/))\\
+`n_folds::Integer` : Number f folds to separate QTl into.
+
+see [`mrStudyCis`](@ref) for options and examples.
+"""
+function mrStudyCisNFolds(exposure::QTLStudy, 
+                           outcome::GWAS, 
+                           bedbimfam_dirnames::AbstractArray{<:AbstractString},
+                           n_folds = 10;
+                           approach::String="naive", 
+                           p_tresh::Float64 = 1e-3, 
+                           window::Int = 500000, 
+                           r2_tresh::Float64 = 0.1,
+                           exposure_filtered = false,
+                           mr_methods::AbstractVector{Function} = [mr_egger, mr_ivw],
+                           α::Float64 = 0.05,
+                           trsf_pval_exp::Union{Function, Nothing} = nothing,
+                           trsf_pval_out::Union{Function, Nothing} = nothing
+                          )::Union{Dataset, GroupBy}
+    if approach == "strict" throw(ArgumentError("aproach should not be strict with mrStudyCisNFolds.")) end
+
+    arr_d = Vector{Dataset}([])
+    for qtl in nfolds(exposure, n_folds)
+        push!(arr_d, mrStudyCis(qtl, 
+                                outcome, 
+                                bedbimfam_dirnames,
+                                approach = approach, 
+                                p_tresh = p_tresh, 
+                                window = window, 
+                                r2_tresh = r2_tresh,
+                                exposure_filtered = exposure_filtered,
+                                mr_methods = mr_methods,
+                                α = α,
+                                trsf_pval_exp = trsf_pval_exp,
+                                trsf_pval_out = trsf_pval_out))
+    end
+
+    return Folds.reduce(vcat, arr_d, init = Dataset())
+end
+
 
 """
 Perform a Mendelian Randomization study with exposure QTL and outcome GWAS
+
+**arguments :**
+
+`exposure::QTLStudy` : exposure QTL data \\
+`outcome::GWAS` : outcome gas data \\
+`bedbimfam_dirnames::AbstractArray{<:AbstractString}` : base names of Plink bedbimfam files for reference genotypes 
+    (see [SnpArrays documentation](https://openmendel.github.io/SnpArrays.jl/latest/))\\
+
+**options : **
+`approach::String`: name of MR study aproach chosen (either naive, test or strict) \\
+`p_tresh::Float64`: pvalue threshold for a SNP to be considered associated to an exposure \\
+`window::Integer`: maximal distance between a potential Instrument Variable and transciption start site of gene exposure  \\
+`r2_tresh::Float64`: maximial corrlation between to SNPs\\
+`exposure_filtered::Bool` : \\
+`mr_methods::AbstractVector{Function}`\\
+`α::Float64`\\
+`trsf_pval_exp::Union{Function, Nothing}` \\
+`trsf_pval_out::Union{Function, Nothing}` \\
+`low_ram::Bool`
+
+
+..... TO BE COMPLETED ....
 """
 function mrStudyCis(exposure::QTLStudy, 
     outcome::GWAS, 
-    bedbimfam_dirnames::AbstractArray{String};
-    approach::String="naive", 
+    bedbimfam_dirnames::AbstractArray{<:AbstractString};
+    approach::String="test", 
     p_tresh::Float64 = 1e-3, 
-    window::Int = 500000, 
+    window::Integer = 500000, 
     r2_tresh::Float64 = 0.1,
-    exposure_filtered = false,
+    exposure_filtered::Bool = false,
     mr_methods::AbstractVector{Function} = [mr_egger, mr_ivw],
     α::Float64 = 0.05,
     trsf_pval_exp::Union{Function, Nothing} = nothing,
-    trsf_pval_out::Union{Function, Nothing} = nothing
+    trsf_pval_out::Union{Function, Nothing} = nothing,
+    low_ram::Bool = false # temporary? if as performant --> set true as default value
     )::Union{Dataset, GroupBy}
-    
-    # plink_files_load_tsk = @async global GenotypesArr = [SnpData(SnpArrays.datadir(file)) for file in bedbimfam_dirnames]
 
-    #qtl_data
+    # input validity verification
+    l_unique_traits = length(unique(qtl.traits_for_each_path))
+    if approach ∉ ["strict", "naive", "test"] throw(ArgumentError("approach must be either : strict, naive or test")) end
+    if (approach != "naive" || l_unique_traits != length(qtl.path_v)) && low_ram 
+        @warn "low_ram option in mrStudyCis with approach different from \"naive\" or not single qtl file per exposure will not be considered. \
+                \nPay attention to Memory state." 
+    end
+
+    # verify if one qtl file per exposure and low_ram -> treat each file separatly
+    if low_ram && l_unique_traits == length(qtl.path_v) && approach == "naive"
+        return mrStudyCisNFolds(exposure, 
+                                 outcome, 
+                                 bedbimfam_dirnames,
+                                 approach = approach, 
+                                 p_tresh = p_tresh, 
+                                 window = window, 
+                                 r2_tresh = r2_tresh,
+                                 exposure_filtered = exposure_filtered,
+                                 mr_methods = mr_methods,
+                                 α = α,
+                                 trsf_pval_exp = trsf_pval_exp,
+                                 trsf_pval_out = trsf_pval_out)
+    end 
+    #load and filter qtl data (filter for significan snps to exposure and within specified window)
     verify_and_simplify_columns!(exposure)
     types, header = make_types_and_headers(exposure)
     qtl_d = read_qtl_files(exposure, types, header, window, p_tresh, exposure_filtered, trsf_pval_exp)
     
-    #gwas_data
+    # load gwas data
     verify_and_simplify_columns!(outcome)
     types, header = make_types_and_headers(outcome)
-    gwas_d = try 
-        filereader(outcome.path, 
+    gwas_d = filereader(outcome.path, 
                     delimiter = outcome.separator, 
                     header = header, types = types, skipto=2, 
                     makeunique=true, eolwarn=false)[:,collect(keys(outcome.columns))]
-    catch e
-        if e isa ArgumentError
-            throw(ArgumentError("Make sure file does not contain idels or exposure names loger than 63 in $(outcome.path)"))
-        else
-            throw(e)
-        end
-    end
-    
 
+    # Transform pval if trsf pval is not nothing
     if trsf_pval_out !== nothing
         modify!(gwas_d, :pval => trsf_pval_out)
     end
+    # change gwas a_effect_out a_other_out to a Pooled array to save memory
     modify!(gwas_d, [:a_effect_out, :a_other_out] => (PooledArray ∘ x -> lowercase.(x)))
 
+    # keep only biallelic snps
     biallelic(s::SubArray) = (s[1]==s[2] && s[3] == s[4]) || (s[1] == s[4] && s[2] == s[3])
     joined_d = @chain qtl_d begin
         innerjoin(gwas_d, on = [:chr, :pos], makeunique = false)
@@ -252,6 +337,7 @@ function mrStudyCis(exposure::QTLStudy,
         filter(:, by = !ismissing)
     end
 
+    # if strict remove all redundant snps (associated to more than one exposure)
     if approach == "strict"
         joined_d.chr_pos = collect(zip(joined_d.chr, joined_d.pos))
         counts = countmap(joined_d.chr_pos)
@@ -259,8 +345,7 @@ function mrStudyCis(exposure::QTLStudy,
         filter!(joined_d, :chr_pos, by = is_unique_iv)
     end
 
-    # wait for loaded plink files and format them
-    # wait(plink_files_load_tsk)
+    # load and format reference snp data
     GenotypesArr = Vector{SnpData}(undef, length(bedbimfam_dirnames))
     @threads for i in 1:lastindex(bedbimfam_dirnames)
         GenotypesArr[i] = SnpData(SnpArrays.datadir(bedbimfam_dirnames[i]))
@@ -269,13 +354,11 @@ function mrStudyCis(exposure::QTLStudy,
 
     one_file_per_chr_plink = length(bedbimfam_dirnames) > 1
 
-    #### for d in eachgroup(joined_d) -> Plink + MR (implement in NaiveCis)
+    #### for d in eachgroup(joined_d) -> Plink + MR (implemented in NaiveCis)
     if approach == "naive" || approach == "strict"
         return NaiveCis(groupby(joined_d, :trait, stable = false), GenotypesArr, r2_tresh = r2_tresh, one_file_per_chr_plink = one_file_per_chr_plink, mr_methodsV = mr_methods, α = α)
     elseif approach == "test"
         return groupby(joined_d, :trait, stable = false)
-    elseif approach == "2ndChance"
-        return Dataset()
     else
         throw(ArgumentError("approach should be either \"naive\", \"test\", \"strict\" or \"2ndChance\""))
     end

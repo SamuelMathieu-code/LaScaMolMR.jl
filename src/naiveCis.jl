@@ -27,8 +27,8 @@ const NOut = length(mr_output_fields)
 Implmentation of naive approach for transcriptome wide MR
     Returns a Dataset of results for each exposure (rows) and 
 """
-function NaiveCis(data::GroupBy, GenotypesArr::AbstractVector{SnpData}; 
-                  one_file_per_chr_plink = true,
+function NaiveCis(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{SnpData}; 
+                  one_file_per_chr_plink::Bool = true,
                   r2_tresh::Float64 = 0.1,
                   mr_methodsV::AbstractVector{Function} = [mr_egger, mr_ivw],
                   α::Float64 = 0.05
@@ -39,6 +39,26 @@ function NaiveCis(data::GroupBy, GenotypesArr::AbstractVector{SnpData};
         @warn "More than one bimbedfam set of files but not corresponding to chromosomes : expected only 1, only first will be considered"
     elseif one_file_per_chr_plink && (length(GenotypesArr) > 24 || length(GenotypesArr) < 22)
         throw(ArgumentError("One bedbimfam file set per chromosome, expected between 22 and 24 file sets"))
+    end
+
+    # make header
+    ncol = NOut*length(mr_methodsV)
+    mr_names = Vector{String}(undef, ncol)
+    @inbounds for i in 1:ncol
+        n = mr_methodsV[div(i, NOut, RoundUp)]
+        if haskey(mrNamesDict, n)
+            mr_names[i] = mrNamesDict[n]
+        else
+            mr_names[i] = string(n)
+        end
+    end
+
+    fields = repeat(collect(string.(fieldnames(mr_output))), length(mr_methodsV))
+    header = ["exposure_name"; mr_names .* fields; "f_min_iv"; "f_max_iv"; "f_med_ivs"]
+
+
+    if data isa Dataset && !InMemoryDatasets.index(data).grouped[]
+        throw(ArgumentError("Expected a grouped Dataset or GroupBy type."))
     end
 
     # for outputs
@@ -97,21 +117,6 @@ function NaiveCis(data::GroupBy, GenotypesArr::AbstractVector{SnpData};
         exposureNamesV[i] = data_group.trait[1]
         f_arr[i, :] = [f_min, f_max, f_med] # F stat for ivs (exposure association force)
     end
-
-    # make header
-    ncol = NOut*length(mr_methodsV)
-    mr_names = Vector{String}(undef, ncol)
-    @inbounds for i in 1:ncol
-        n = mr_methodsV[div(i, NOut, RoundUp)]
-        if haskey(mrNamesDict, n)
-            mr_names[i] = mrNamesDict[n]
-        else
-            mr_names[i] = string(n)
-        end
-    end
-
-    fields = repeat(collect(string.(fieldnames(mr_output))), length(mr_methodsV))
-    header = ["exposure_name"; mr_names .* fields; "f_min_iv"; "f_max_iv"; "f_med_ivs"]
     
     return Dataset([exposureNamesV outputArr f_arr], header)
 end

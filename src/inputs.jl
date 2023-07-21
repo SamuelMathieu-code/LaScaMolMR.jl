@@ -74,7 +74,9 @@ GWAS(path,
 
 
 """
-Type QTLStudy which contains informations about QTL file(s) format and implacement
+Type QTLStudy which contains informations about QTL file(s) format and implacement.
+
+The method [`QTLStudy_from_pattern`](@ref) helps building information from patterns in file names and is the prefered methods to construct a QTLStudy.
 """
 mutable struct QTLStudy
     path_v::Vector{S1} where S1 <: Union{Missing, AbstractString}
@@ -256,13 +258,26 @@ function QTLStudy_from_pattern(folder::AbstractString,
     return QTLStudy(files, traits_for_each_file, trait_v, chr_v, tss_v, columns, separator)
 end
 
+# Divide QTLStudy in N sub qtl data
+"""
+Partitionate QTLStudy in n folds. Returns a vector of QTLStudy in which each element contains a subsets of file paths and corresponding traits. 
 
-# Iteration overload for QtlStudy
+**arguments :""
+
+`x::QTLStudy` : the qtl files and informations (see [`QTLStudy`](@ref)) \\
+`m::Integer` : the number of folds
+"""
+function nfolds(x::QTLStudy, n::Integer)
+    if n > length(qtl) throw(ArgumentError("n should be smaller the qtl's nuber of files.")) end
+    s = length(x) / n
+    [x[round(Int64, (i-1)*s)+1:min(length(x),round(Int64, i*s))] for i=1:n]
+end
+
+# Iteration and indexing overload for QtlStudy
 function Base.iterate(iter::QTLStudy)
     element = GWAS(iter.path_v[1], iter.columns, iter.separator, iter.trait_v[1])
     return (element, 1)
 end
-
 
 function Base.iterate(iter::QTLStudy, state)
     count = state + 1
@@ -277,8 +292,8 @@ function Base.getindex(iter::QTLStudy, i::Int)
     return GWAS(iter.path_v[i], iter.columns, iter.separator, iter.traits_for_each_path[i])
 end
 
-function Base.getindex(iter::QTLStudy, i::Union{AbstractUnitRange, AbstractVector{Int}})                 ########## Or QTLStudy subset?
-    return [GWAS(iter.path_v[j], iter.columns, iter.separator, iter.traits_for_each_path[j]) for j in i]
+function Base.getindex(iter::QTLStudy, i::Union{AbstractUnitRange, AbstractVector{Int}})
+    return QTLStudy(iter.path_v[i], iter.traits_for_each_path[i], iter.trait_v, iter.chr_v, iter.tss_v, iter.columns, iter.separator)
     
 end
 
@@ -288,4 +303,8 @@ end
 
 function Base.length(iter::QTLStudy)
     return length(iter.path_v)
+end
+
+function Base.eachindex(iter::QTLStudy)
+    return eachindex(iter.path_v, iter.traits_for_each_path)
 end

@@ -1,10 +1,10 @@
 module MrPainter
 
 # Write your package code here.
-export GenVarInfo, GWAS, QTLStudy, QTLStudy_from_pattern
+export GenVarInfo, GWAS, QTLStudy, QTLStudy_from_pattern, nfolds
 export mr_output, mr_egger, mr_ivw, mr_wald, mr_wm
 export clump, formatSnpData!
-export mrStudyCis, NaiveCis
+export mrStudyCis, mrStudyCisNFolds, NaiveCis
 # ... others to come
 
 include("ld.jl")
