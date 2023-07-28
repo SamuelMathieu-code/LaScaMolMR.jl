@@ -305,7 +305,7 @@ function mrStudyCis(exposure::QTLStudy,
     if low_ram && l_unique_traits == length(qtl.path_v) && approach ∈ ["naive", "test"]
         return mrStudyCisNFolds(exposure, 
                                  outcome, 
-                                 bedbimfam_dirnames,
+                                 bedbimfam_dirnames;
                                  approach = approach, 
                                  p_tresh = p_tresh, 
                                  window = window, 
