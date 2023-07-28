@@ -24,7 +24,7 @@ w_v = abs2.(βx_ordered ./ se_βy_ordered)
 p_v = accumulate(+, w_v) - (w_v / 2)
 p_v /= sum(w_v)
 p = findfirst(x -> x ≥ 0.5, p_v)
-θ_est = (p != 1) ? θ_v[p-1] + (θ_v[p] - θ_v[p-1])*(0.5 - p_v[p-1])/(p_v[p] - p_v[p-1]) : 0
+θ_est = (p != 1) ? θ_v[p-1] + (θ_v[p] - θ_v[p-1])*(0.5 - p_v[p-1])/(p_v[p] - p_v[p-1]) : θ_v[p]*0.5/p_v[p]
 return θ_est
 end
 
