@@ -176,7 +176,8 @@ function mr_ivw(β_Y::AbstractVector{<: Union{AbstractFloat, Missing}},
                 se_β_Y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
                 β_X::AbstractVector{<: Union{AbstractFloat, Missing}}, 
                 se_β_X::AbstractVector{<: Union{AbstractFloat, Missing}} = Vector{Float32}([]),
-                α::AbstractFloat = 0.05)::mr_output # where F <: Union{AbstractFloat, Missing}
+                α::AbstractFloat = 0.05;
+                model::Symbol = :default)::mr_output # where F <: Union{AbstractFloat, Missing}
 
     
     m = length(β_X)
@@ -184,6 +185,12 @@ function mr_ivw(β_Y::AbstractVector{<: Union{AbstractFloat, Missing}},
     if m < 2
         return mr_output(m)
     end
+    if model == :default
+        model = (m ≥ 4) ? :random : :fixed
+    elseif model ∉ [:fixed, :random]
+        throw(ArgumentError("`method` must be :fixed, :random or :default"))
+    end
+
     # regression
     w = inv.(abs2.(se_β_Y))
     regressor = lm(@formula(β_Y ~ 0 + β_X), (;β_X, β_Y), wts = w)
@@ -198,7 +205,12 @@ function mr_ivw(β_Y::AbstractVector{<: Union{AbstractFloat, Missing}},
     X = sqrt.(w).*β_X
     se_θivw_est = sqrt((u'*u)*(X'*X)^(-1)/(m-1))
     σ = sqrt(sum(abs2.(u))/(m-1))
-    se_θivw_est /= min(σ, 1)
+    
+    if model == :random
+        se_θivw_est /= min(σ, 1)
+    else
+        se_θivw_est /= σ
+    end
 
     dh = Normal(0, se_θivw_est)
     dobs = Normal(θivw_est, se_θivw_est)

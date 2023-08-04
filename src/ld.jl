@@ -170,7 +170,7 @@ function clump(ref_genotypes::SnpData,
                 @inbounds if indx_v_b[j]
                     s1 = @view ref_genotypes.snparray[:, snps_indx[i]]
                     s2 = @view ref_genotypes.snparray[:, snps_indx[j]]
-                    if ld_r²(s1, s2) > r2_tresh
+                    if ld_r²(s1, s2) > r2_tresh                         # !(abs(snps[i][2] - snps[j][2]) > 1_000_000) && ld_r²(s1, s2) > r2_tresh
                             indx_v_b[j] = false
                     end
                 end

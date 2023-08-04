@@ -82,8 +82,8 @@ mutable struct QTLStudy
     path_v::Vector{S1} where S1 <: Union{Missing, AbstractString}
     traits_for_each_path::Vector{SN} where SN <: Union{String, Missing, Nothing}
     trait_v::Vector{S2} where S2 <: Union{Missing, AbstractString}
-    chr_v::Vector{I1} where I1 <: Union{Missing, Integer}
-    tss_v::Vector{I2} where I2 <: Union{Missing, Integer}
+    chr_v::Union{Vector{I1}, Nothing} where I1 <: Union{Missing, Integer}
+    tss_v::Union{Vector{I2}, Nothing} where I2 <: Union{Missing, Integer}
     columns::Union{Dict{I3, GenVarInfo}} where I3 <: Integer
     separator::Union{Char, Vector{Char}}
 end
@@ -161,12 +161,18 @@ qtl = QTLStudy_from_pattern("test/data", path_pattern, ttrait_v, chr_v, tss_v,
 """
 function QTLStudy_from_pattern(folder::AbstractString,
     path_pattern::AbstractVector, 
-    trait_v, 
-    chr_v, 
-    tss_v, 
+    trait_v::Vector{S2} where S2 <: Union{Missing, AbstractString}, 
+    chr_v::Union{Vector{I2}, Nothing} where I2 <: Union{Missing, Integer}, 
+    tss_v::Union{Vector{I2}, Nothing} where I2 <: Union{Missing, Integer}, 
     columns::Union{Dict{Int, Any}, Dict{Int, GenVarInfo}}, 
     separator::Union{Char, AbstractVector{Char}},
     only_corresp_chr::Bool = true)::QTLStudy                 ########### only_corresp_chr not used! (always treated as true)
+
+    if ((chr_v === nothing || tss_v === nothing) && only_corresp_chr)
+        throw(ArgumentError("argument `only_corresp_chr` requires chr_v, tss_v")) 
+    elseif (nothing !== tss_v || nothing !== chr_v) && !(length(trait_v) == length(chr_v) == length(tss_v))
+        throw(ArgumentError("chr_v, tss_v, trait_v must be same length"))
+    end
 
     if path_pattern[1] isa String && startswith(path_pattern[1], Base.Filesystem.path_separator)
         @warn "The first element of path_pattern starts with the path separator. Paths separators are not necessary in this place. It will be removed"
@@ -233,7 +239,7 @@ function QTLStudy_from_pattern(folder::AbstractString,
             g2(x) = parse(Int, match(pattern, x).captures[1])
             files_chr = map(g2, files)
         else
-            files_chr_b = [true for i in 1:length(files)]
+            files_chr_b = [true for i in 1:length(files)] #### !!! Account for chr X and Y potentially !!!
         end
     else
         files_chr_b = [true for i in 1:length(files)]
