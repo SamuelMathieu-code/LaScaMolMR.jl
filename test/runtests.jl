@@ -1,4 +1,4 @@
-using MrPainter
+using LaScaMolMR
 using Test
 using SnpArrays
 

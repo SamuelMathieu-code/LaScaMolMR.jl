@@ -1,4 +1,4 @@
-module MrPainter
+module LaScaMolMR
 
 # Write your package code here.
 export GenVarInfo, GWAS, QTLStudy, QTLStudy_from_pattern, nfolds
