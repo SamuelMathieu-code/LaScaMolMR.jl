@@ -153,13 +153,12 @@ function clump(ref_genotypes::SnpData,
     snps_indx = Vector{Int}(undef, size(snps, 1)) # indices 
     indx_v_b = Vector{Bool}(undef, size(snps, 1)) # found or not
     @threads for (i, chr_pos_sing) in collect(enumerate(snps))
-        j = searchsortedfirst(ref_genotypes.snp_info.chr_pos, chr_pos_sing)
-        @inbounds begin 
-            indx_v_b[i] = firstindex(ref_genotypes.snp_info.chr_pos) ≤ j ≤ lastindex(ref_genotypes.snp_info.chr_pos) && 
-                          ref_genotypes.snp_info.chr_pos[j] == chr_pos_sing
-            if indx_v_b[i]
-                snps_indx[i] = ref_genotypes.snp_info.idx[j]
-            end
+        j = searchsorted(ref_genotypes.snp_info.chr_pos, chr_pos_sing) # range valid if of length 1 (> 1 => triallelic, < 1 => not found)
+        if length(j) == 1
+            indx_v_b[i] = true
+            snps_indx[i] = ref_genotypes.snp_info.idx[j[]]
+        else
+            indx_v_b[i] = false
         end
     end
 

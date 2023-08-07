@@ -445,7 +445,8 @@ function mrStudyTransNFolds(exposure::QTLStudy,
                            trsf_pval_out::Union{Function, Nothing} = nothing,
                            pval_bigfloat::Bool = false,
                            write_ivs::Union{AbstractString, Nothing} = nothing,
-                           write_filtered_exposure::Union{AbstractString, Nothing} = nothing
+                           write_filtered_exposure::Union{AbstractString, Nothing} = nothing,
+                           filter_beta_ratio::Real = 0
                           )::Union{Dataset, GroupBy}
     if approach != "naive" throw(ArgumentError("aproach should not be strict with mrStudyCisNFolds.")) end
 
@@ -464,7 +465,8 @@ function mrStudyTransNFolds(exposure::QTLStudy,
                                 trsf_pval_out = trsf_pval_out,
                                 pval_bigfloat = pval_bigfloat,
                                 write_ivs = write_ivs,
-                                write_filtered_exposure = write_filtered_exposure))
+                                write_filtered_exposure = write_filtered_exposure,
+                                filter_beta_ratio = filter_beta_ratio))
     end
 
     return Folds.reduce(vcat, arr_d, init = Dataset())
@@ -516,7 +518,8 @@ function mrStudyTrans(exposure::QTLStudy,
     low_ram::Bool = false, # temporary? if as performant --> set true as default value
     pval_bigfloat::Bool = false,
     write_ivs::Union{AbstractString, Nothing} = nothing,
-    write_filtered_exposure::Union{AbstractString, Nothing} = nothing
+    write_filtered_exposure::Union{AbstractString, Nothing} = nothing,
+    filter_beta_ratio::Real = 0
     )::Union{Dataset, GroupBy}
 
     # input validity verification
@@ -540,7 +543,8 @@ function mrStudyTrans(exposure::QTLStudy,
                                  α = α,
                                  trsf_pval_exp = trsf_pval_exp,
                                  trsf_pval_out = trsf_pval_out,
-                                 pval_bigfloat = pval_bigfloat)
+                                 pval_bigfloat = pval_bigfloat,
+                                 filter_beta_ratio = filter_beta_ratio)
     end 
     #load and filter qtl data (filter for significan snps to exposure and within specified window)
     verify_and_simplify_columns!(exposure)
@@ -567,7 +571,7 @@ function mrStudyTrans(exposure::QTLStudy,
     modify!(gwas_d, [:a_effect_out, :a_other_out] => (PooledArray ∘ x -> lowercase.(x)))
 
     # keep only biallelic snps
-    biallelic(s::SubArray) = (s[1]==s[2] && s[3] == s[4]) || (s[1] == s[4] && s[2] == s[3])
+    biallelic(s::SubArray) = (s[1] == s[2] && s[3] == s[4]) || (s[1] == s[4] && s[2] == s[3])
     joined_d = @chain qtl_d begin
         innerjoin(gwas_d, on = [:chr, :pos], makeunique = false)
         filter([:a_effect_exp, :a_effect_out, :a_other_exp, :a_other_out], type = biallelic, missings = false) # filter for "obvious" non biallelic variants
@@ -582,6 +586,10 @@ function mrStudyTrans(exposure::QTLStudy,
         filter!(joined_d, :chr_pos, by = is_unique_iv)
     end
 
+    if filter_beta_ratio > 0
+        beta_compare_b(s) = abs(s[2]) ≤ abs(s[1])
+        filter!(joined_d, [:β_exp, :β_out], type = beta_compare_b, missings = false)
+    end
 
     # load and format reference snp data
     GenotypesArr = Vector{SnpData}(undef, length(bedbimfam_dirnames))
@@ -600,4 +608,44 @@ function mrStudyTrans(exposure::QTLStudy,
     else
         return joined_d
     end
+end
+
+
+function mrStudyTrans(exposure::GWAS, 
+                      outcome::GWAS, 
+                      bedbimfam_dirnames::AbstractArray{<:AbstractString};
+                      approach::String="naive", 
+                      p_tresh::Float64 = 1e-3, 
+                      r2_tresh::Float64 = 0.1,
+                      exposure_filtered::Bool = false,
+                      mr_methods::AbstractVector{Function} = [mr_egger, mr_ivw],
+                      α::Float64 = 0.05,
+                      trsf_pval_exp::Union{Function, Nothing} = nothing,
+                      trsf_pval_out::Union{Function, Nothing} = nothing,
+                      low_ram::Bool = false, # temporary? if as performant --> set true as default value
+                      pval_bigfloat::Bool = false,
+                      write_ivs::Union{AbstractString, Nothing} = nothing,
+                      write_filtered_exposure::Union{AbstractString, Nothing} = nothing,
+                      filter_beta_ratio::Real = 0
+                      )::Union{Dataset, GroupBy}
+
+exposure_name = (exposure.trait_name === nothing) ? "exposure" : exposure.trait_name
+
+qtl_exposure = QTLStudy(exposure.path, [exposure_name], [exposure_name], nothing, nothing, exposure.columns, exposure.separator)
+
+return mrStudyTrans(qtl_exposure, outcome, bedbimfam_dirnames;
+                    approach = approach,
+                    p_tresh = p_tresh,
+                    r2_tresh = r2_tresh,
+                    exposure_filtered = exposure_filtered.
+                    mr_methods = mr_methods,
+                    α = α,
+                    trsf_pval_exp = trsf_pval_exp,
+                    trsf_pval_out = trsf_pval_out,
+                    low_ram = low_ram,
+                    pval_bigfloat = pval_bigfloat,
+                    write_ivs = write_ivs,
+                    write_filtered_exposure = write_filtered_exposure,
+                    filter_beta_raio = filter_beta_ratio)
+
 end
