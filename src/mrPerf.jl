@@ -9,54 +9,43 @@ using Statistics
     #        Utilities        #
     ###########################
 
-"""
-Raw weighted median effect size estimate
-"""
-function wm_estimate(β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
-                     se_β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
-                     β_X::AbstractVector{F} where F <: Union{Float64, Missing}
+
+# Raw weighted median effect size estimate
+function _wm_estimate(β_Y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
+                     se_β_Y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
+                     β_X::AbstractVector{<: Union{AbstractFloat, Missing}}
                      )::Float64
+
 θ_v = β_Y ./ β_X
 order = sortperm(θ_v)
 θ_v, se_βy_ordered, βx_ordered = θ_v[order], se_β_Y[order], β_X[order]
-w_v = (βx_ordered ./ se_βy_ordered) .^ 2
-p_v = accumulate(+, w_v) - (w_v ./ 2)
+w_v = abs2.(βx_ordered ./ se_βy_ordered)
+p_v = accumulate(+, w_v) - (w_v / 2)
 p_v /= sum(w_v)
 p = findfirst(x -> x ≥ 0.5, p_v)
-θ_est = (p != 1) ? θ_v[p-1] + (θ_v[p] - θ_v[p-1])*(0.5 - p_v[p-1])/(p_v[p] - p_v[p-1]) : 0
+θ_est = (p != 1) ? θ_v[p-1] + (θ_v[p] - θ_v[p-1])*(0.5 - p_v[p-1])/(p_v[p] - p_v[p-1]) : θ_v[p]*0.5/p_v[p]
 return θ_est
 end
 
 
-"""
-Numerical esimation of weighted median effect size standard error
-"""
-function bootstrap_se_wm(β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
-    se_β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
-    β_X::AbstractVector{F} where F <: Union{Float64, Missing},
-    se_β_X::AbstractVector{F} where F <: Union{Float64, Missing}, 
+
+# Numerical esimation of weighted median effect size standard error
+function _bootstrap_se_wm(β_Y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
+    se_β_Y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
+    β_X::AbstractVector{<: Union{AbstractFloat, Missing}},
+    se_β_X::AbstractVector{<: Union{AbstractFloat, Missing}}, 
     iterations = 5000,
     seed = 42)::Float64
 
     Random.seed!(seed)
 
-    dx = MvNormal(Vector{Float64}(β_X), LinearAlgebra.Diagonal(map(abs2, Vector{Float64}(se_β_X))))
-    dy = MvNormal(Vector{Float64}(β_Y), LinearAlgebra.Diagonal(map(abs2, Vector{Float64}(se_β_Y))))
-    θ_est_v = Vector{Float64}(undef, iterations)
+    dx = MvNormal(Vector{Float32}(β_X), LinearAlgebra.Diagonal(map(abs2, Vector{Float32}(se_β_X))))
+    dy = MvNormal(Vector{Float32}(β_Y), LinearAlgebra.Diagonal(map(abs2, Vector{Float32}(se_β_Y))))
+    θ_est_v = Vector{Float32}(undef, iterations)
     for i in 1:iterations
-        θ_est_v[i] = wm_estimate(rand(dy), se_β_Y, rand(dx))
+        θ_est_v[i] = _wm_estimate(rand(dy), se_β_Y, rand(dx))
     end
     return Statistics.std(θ_est_v)
-end
-
-
-function ftest_egger(mod::LinearModel, n::Int64)::Tuple{Float64, Float64}
-    rss = deviance(mod)
-    tss = nulldeviance(mod)
-    p = dof(mod) - 2 # -2 for intercept and dispersion parameter
-    fstat = ((tss - rss) / rss) * ((n - p - 1) / p)
-    fdist = FDist(p, dof_residual(mod))
-    return fstat, ccdf(fdist, abs(fstat))
 end
 
 
@@ -69,6 +58,21 @@ end
 
 """
 Struct encapsulating the outputs of a Mendelian Randomization analysis
+
+fields :
+
+`nivs` : number of ivs included in regression \\
+`effect` : effect size estimate ̂γ₀ \\
+`se_effect` : standard error of effect size estimate \\
+`ci_low` : lower bound of confidence interval for effect size \\
+`ci_high` : higher bound of confidence interval for effect size \\
+`p` : effect size p-value for H₀ : γ₀ = 0 \\
+`intercept` : intercept estimate ̂γ₁ \\
+`p_intercept` : p-value for H₀ : γ₁ = 0 \\
+`ci_low_intercept` : lower bound of confidence interval for intercept \\
+`ci_high_intercept` : higher bound of confidence interval for intercept \\
+`heter_stat` : heterogenetity statistic corresponding to Cochran ̂t \\
+`heter_p` : heterogeneity p-value for H₀ : t = 0
 """
 struct mr_output
     nivs::Int
@@ -83,14 +87,11 @@ struct mr_output
     ci_high_intercept::Float64
     heter_stat::Float64
     heter_p::Float64
-    fstat::Float64
-    fpval::Float64
 end
 
 
-"""
-Default values constructor for mr_output
-"""
+
+# Default values constructor for mr_output with no heterogeneity stats
 function mr_output(n::Int, 
     effect::Float64 = NaN,
     se_effect::Float64 = NaN,
@@ -100,11 +101,9 @@ function mr_output(n::Int,
     intercept::Float64 = NaN,
     p_intercept::Float64 = NaN,
     ci_low_intercept::Float64 = NaN,
-    ci_high_intercept::Float64 = NaN,
-    heter_stat::Float64 = NaN,
-    heter_p::Float64 = NaN)::mr_output
+    ci_high_intercept::Float64 = NaN)::mr_output
 
-    mr_output(n, effect, se_effect, ci_low, ci_high, p, intercept, p_intercept, ci_low_intercept, ci_high_intercept, heter_stat, heter_p, NaN, NaN)
+    mr_output(n, effect, se_effect, ci_low, ci_high, p, intercept, p_intercept, ci_low_intercept, ci_high_intercept, NaN, NaN)
     
 end
 
@@ -112,11 +111,19 @@ end
 """
 Wald ratio for Mendelian Randomization with a single instrumental variable
      y is outcome, x is exposure
+
+**arguments :**
+
+`β_Y` : outcome effect sizes
+`se_β_Y` : standard error of outcome effect size
+`β_X` : exposure effect size
+`α` : α value for confidence intervals (default is 0.05)
+
 """
-function mr_wald(β_Y::F where F <: AbstractFloat, 
-                 se_β_Y::F where F <: AbstractFloat, 
-                 β_X::F where F <: AbstractFloat, 
-                 α::F where F <: AbstractFloat = 0.05)::mr_output # À véerifier que la distribustion normale convient!!!!!!!!
+function mr_wald(β_Y::AbstractFloat, 
+                 se_β_Y::AbstractFloat, 
+                 β_X::AbstractFloat, 
+                 α::AbstractFloat = 0.05)::mr_output # À véerifier que la distribustion normale convient!!!!!!!!
     θ = β_Y / β_X
     se_θ = se_β_Y / abs(β_X)
     dh = Normal(0, se_θ)
@@ -127,11 +134,24 @@ function mr_wald(β_Y::F where F <: AbstractFloat,
     return mr_output(1, θ, se_θ, ci_low, ci_high, p)
 end
 
-function mr_wald(β_y::AbstractVector{F} where F <: Union{AbstractFloat, Missing}, 
-                 se_β_y::AbstractVector{F} where F <: Union{AbstractFloat, Missing}, 
-                 β_x::AbstractVector{F} where F <: Union{AbstractFloat, Missing}, 
-                 se_β_X::AbstractVector{F} where F <: Union{Float64, Missing} = Vector{Float64}([]),
-                 α::F where F <: AbstractFloat = 0.05)::mr_output
+"""
+Wald ratio for Mendelian Randomization with a single instrumental variable
+     y is outcome, x is exposure
+
+**arguments :**
+
+`β_Y` : vector of outcome effect sizes
+`se_β_Y` : vector of standard error of outcome effect sizes
+`β_X` : vector of exposure effect sizes
+`se_β_X` : vector of standard error for exposure effect sizes
+`α` : α value for confidence intervals (default is 0.05)
+
+"""
+function mr_wald(β_y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
+                 se_β_y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
+                 β_x::AbstractVector{<: Union{AbstractFloat, Missing}}, 
+                 se_β_X::AbstractVector{<: Union{AbstractFloat, Missing}} = Vector{Float32}([]),
+                 α::AbstractFloat = 0.05)::mr_output
     return mr_wald(β_y[1], se_β_y[1], β_x[1], α)
 end
 
@@ -139,29 +159,57 @@ end
 """
 Inverse variance weighted linear regression with simple weights (se(B_Y)^-2) Mendelian Randomization
     Y is outcome, X is exposure
+
+currently waiting for GLM.jl PR#487 to be merged to use analytical weights instead of doing calculations twice...
+
+**arguments :**
+
+`β_Y` : vector of outcome effect sizes
+`se_β_Y` : vector of standard error of outcome effect sizes
+`β_X` : vector of exposure effect sizes
+`se_β_X` : vector of standard error for exposure effect sizes
+`α` : α value for confidence intervals (default is 0.05)
+
 """
-function mr_ivw(β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
-                se_β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
-                β_X::AbstractVector{F} where F <: Union{Float64, Missing}, 
-                se_β_X::AbstractVector{F} where F <: Union{Float64, Missing} = Vector{Float64}([]),
-                α::F where F <: AbstractFloat = 0.05)::mr_output #where F <: Union{AbstractFloat, Missing}
+function mr_ivw(β_Y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
+                se_β_Y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
+                β_X::AbstractVector{<: Union{AbstractFloat, Missing}}, 
+                se_β_X::AbstractVector{<: Union{AbstractFloat, Missing}} = Vector{Float32}([]),
+                α::AbstractFloat = 0.05;
+                model::Symbol = :default)::mr_output # where F <: Union{AbstractFloat, Missing}
 
     
     m = length(β_X)
+    if !(length(β_Y) == length(se_β_Y) == m) throw(ArgumentError("β_x, β_y, se_β_X, se_β_Y Vectors must be of same length")) end
     if m < 2
         return mr_output(m)
     end
+    if model == :default
+        model = (m ≥ 4) ? :random : :fixed
+    elseif model ∉ [:fixed, :random]
+        throw(ArgumentError("`method` must be :fixed, :random or :default"))
+    end
+
     # regression
-    w = se_β_Y .^ (-2)
+    w = inv.(abs2.(se_β_Y))
     regressor = lm(@formula(β_Y ~ 0 + β_X), (;β_X, β_Y), wts = w)
     θivw_est = coef(regressor)[1]
+
+    if any(isnan.(stderror(regressor)))
+        return mr_output(m)
+    end
     
     ϵ = residuals(regressor)
     u = sqrt.(w).*ϵ
     X = sqrt.(w).*β_X
     se_θivw_est = sqrt((u'*u)*(X'*X)^(-1)/(m-1))
-    σ = sqrt(sum(u.^2)/(m-1))
-    se_θivw_est /= min(σ, 1)
+    σ = sqrt(sum(abs2.(u))/(m-1))
+    
+    if model == :random
+        se_θivw_est /= min(σ, 1)
+    else
+        se_θivw_est /= σ
+    end
 
     dh = Normal(0, se_θivw_est)
     dobs = Normal(θivw_est, se_θivw_est)
@@ -180,30 +228,46 @@ end
 """
 Egger Mendelian Randomization
     Y is outcome, X is exposure
+
+currently waiting for GLM.jl PR#487 to be merged to use analytical weights instead of doing calculations twice...
+
+**arguments :**
+
+`β_Y` : vector of outcome effect sizes
+`se_β_Y` : vector of standard error of outcome effect sizes
+`β_X` : vector of exposure effect sizes
+`se_β_X` : vector of standard error for exposure effect sizes
+`α` : α value for confidence intervals (default is 0.05)
+    
 """
-function mr_egger(β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
-                  se_β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
-                  β_X::AbstractVector{F} where F <: Union{Float64, Missing}, 
-                  se_β_X::AbstractVector{F} where F <: Union{Float64, Missing} = Vector{Float64}([]),
-                  α::F where F <: AbstractFloat = 0.05)::mr_output
+function mr_egger(β_Y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
+                  se_β_Y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
+                  β_X::AbstractVector{<: Union{AbstractFloat, Missing}}, 
+                  se_β_X::AbstractVector{<: Union{AbstractFloat, Missing}} = Vector{Float32}([]),
+                  α::AbstractFloat = 0.05)::mr_output
     
     # regression
     m = length(β_X)
+    if !(length(β_Y) == length(se_β_Y) == m) throw(ArgumentError("β_x, β_y, se_β_X, se_β_Y Vectors must be of same length")) end
     if m < 3
         return mr_output(m)
     end
-    w =  se_β_Y .^ (-2)
+    w =  inv.(abs2.(se_β_Y))
     β_Y_abs = sign.(β_X).*β_Y
     β_X_abs = abs.(β_X)
     regressor = lm(@formula(β_Y_abs ~ β_X_abs), (;β_X_abs, β_Y_abs), wts = w)
-    fstat, fp = ftest_egger(regressor.model, m)
     θ_est = coef(regressor)
+    
+    if any(isnan.(stderror(regressor)))
+        return mr_output(m)
+    end
+
 
     ϵ = residuals(regressor)
     X = sqrt.(w) .* [ones(m) β_X_abs]
     u = sqrt.(w) .* ϵ
     se = (u'*u)*(X'*X)^(-1)/(m-2)
-    σ = sqrt(sum(u.^2)/(m-2))
+    σ = sqrt(sum(abs2.(u))/(m-2))
     se_θ_est = sqrt.(diag(se)) ./ min(σ, 1)
 
     # index 1 is intercept and index two is effect (se_θ_est, θ_est)
@@ -218,36 +282,50 @@ function mr_egger(β_Y::AbstractVector{F} where F <: Union{Float64, Missing},
     ci_low_intercept, ci_high_intercept = quantile(dintercept, α/2), quantile(dintercept, 1-α/2)
 
     # heterogeneity
-    heter_stat = sum((ϵ ./ se_β_Y).^2)
+    heter_stat = sum(abs2.(ϵ ./ se_β_Y))
     chisq = Chisq(m - 2)
     heter_p = 1 - cdf(chisq, heter_stat)
 
     return mr_output(length(β_Y), θ_est[2], se_θ_est[2], θ_ci_low, θ_ci_high, p, 
                      θ_est[1], p_intercept, ci_low_intercept, ci_high_intercept, 
-                     heter_stat, heter_p, fstat, fp)
+                     heter_stat, heter_p)
 end
 
 
 """
 Weighted Median Mendelian Randomization (Bowden et al., 2015)
-    Y is outcome, X is exposure
+    Y is outcome, X is exposure.
+
+**arguments :**
+
+`β_Y` : vector of outcome effect sizes
+`se_β_Y` : vector of standard error of outcome effect sizes
+`β_X` : vector of exposure effect sizes
+`se_β_X` : vector of standard error for exposure effect sizes
+`α` : α value for confidence intervals (default is 0.05)
+
+**options :**
+`iterations` : number of iterations for estimate of standrard error or effect size.
+`seed` : seed of random generator
 """
-function mr_wm(β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
-               se_β_Y::AbstractVector{F} where F <: Union{Float64, Missing}, 
-               β_X::AbstractVector{F} where F <: Union{Float64, Missing},
-               se_β_X::AbstractVector{F} where F <: Union{Float64, Missing}, 
-               α::F where F <: AbstractFloat = 0.05;
+function mr_wm(β_Y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
+               se_β_Y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
+               β_X::AbstractVector{<: Union{AbstractFloat, Missing}},
+               se_β_X::AbstractVector{<: Union{AbstractFloat, Missing}}, 
+               α::AbstractFloat = 0.05;
                iterations::Integer = 5000,
                seed = 42)::mr_output
     
     m = length(β_X)
+    if !(length(β_Y) == length(se_β_Y) == m == length(se_β_X)) throw(ArgumentError("β_x, β_y, se_β_X, se_β_Y Vectors must be of same length")) end
+    if iterations < 2 throw(ArgumentError("at least two iterations are needed")) end
     if m < 3
         return mr_output(m)
     end
     
-    θ_est = wm_estimate(β_Y, se_β_Y, β_X)
+    θ_est = _wm_estimate(β_Y, se_β_Y, β_X)
     # bootstrap fo find standard error
-    θ_se_est = bootstrap_se_wm(β_Y, se_β_Y, β_X, se_β_X, iterations, seed)
+    θ_se_est = _bootstrap_se_wm(β_Y, se_β_Y, β_X, se_β_X, iterations, seed)
 
     dh = Normal(0, θ_se_est)
     dobs = Normal(θ_est, θ_se_est)
