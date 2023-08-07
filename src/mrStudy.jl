@@ -330,7 +330,7 @@ function mrStudyCis(exposure::QTLStudy,
     if approach ∉ ["strict", "naive", "test", "test-strict"] throw(ArgumentError("approach must be either : strict, naive, test or test-strict")) end
     if (approach != "naive" || length(exposure.path_v) < 10) && low_ram 
         @warn "low_ram option in mrStudyCis with approach different from \"naive\" or less than 10 files in QTLStudy will not be considered. \
-                \nPay attention to Memory state." 
+        Pay attention to Memory state." 
     end
 
     # verify if one qtl file per exposure and low_ram -> make folds to limit ram usage
