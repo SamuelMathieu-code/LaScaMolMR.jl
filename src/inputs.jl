@@ -274,7 +274,7 @@ Partitionate QTLStudy in n folds. Returns a vector of QTLStudy in which each ele
 `m::Integer` : the number of folds
 """
 function nfolds(x::QTLStudy, n::Integer)
-    if n > length(qtl) throw(ArgumentError("n should be smaller the qtl's nuber of files.")) end
+    if n > length(x) throw(ArgumentError("n should be smaller the qtl's nuber of files.")) end
     s = length(x) / n
     [x[round(Int64, (i-1)*s)+1:min(length(x),round(Int64, i*s))] for i=1:n]
 end
