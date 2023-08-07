@@ -283,7 +283,8 @@ Perform a Cis-Mendelian Randomization study with exposure QTL and outcome GWAS
 `bedbimfam_dirnames::AbstractArray{<:AbstractString}` : base names of Plink bedbimfam files for reference genotypes 
     (see [SnpArrays documentation](https://openmendel.github.io/SnpArrays.jl/latest/))\\
 
-**options : ** \\
+**options :**
+
 `approach::String`: name of MR study aproach chosen (either naive, test or strict) (default is "naive")\\
 `p_tresh::Float64`: pvalue threshold for a SNP to be considered associated to an exposure (default is 1e-3)\\
 `window::Integer`: maximal distance between a potential Instrument Variable and transciption start site of gene exposure (default is 500_000)\\
@@ -297,7 +298,10 @@ Perform a Cis-Mendelian Randomization study with exposure QTL and outcome GWAS
 `α::Float64` : α value for confidance intervals of parameter estimations in MR (e.g. 95% CI is α = 0.05, which is the default value)\\
 `trsf_pval_exp::Union{Function, Nothing}` : Transformation to apply to pvalues in exposure dataset\\
 `trsf_pval_out::Union{Function, Nothing}` : t = Transormation to apply on pvalues in outcome dataset\\
-`low_ram::Bool` : If true, if the exposure files each contain only one exposure trait, [`mrStudyCisNFolds`](@ref) with n_folds of 10 will be used.
+`low_ram::Bool` : If true, if the exposure files each contain only one exposure trait, [`mrStudyCisNFolds`](@ref) with n_folds of 10 will be used.\\
+`write_ivs::AbstractString` : write selected Instrumental variables to specified directory\\
+`write_filtered_exposure::AbstractString` : write a filtered version of exposure files to specified file name.
+    This file will be tab separated and will only contain columns necessary for further MR Studies.
 
 ## Examples
 
@@ -495,6 +499,10 @@ Perform a Trans-Mendelian Randomization study with exposure QTL and outcome GWAS
 `trsf_pval_exp::Union{Function, Nothing}` : Transformation to apply to pvalues in exposure dataset\\
 `trsf_pval_out::Union{Function, Nothing}` : t = Transormation to apply on pvalues in outcome dataset\\
 `low_ram::Bool` : If true, if the exposure files each contain only one exposure trait, [`mrStudyCisNFolds`](@ref) with n_folds of 10 will be used.
+`write_ivs::AbstractString` : write selected Instrumental variables to specified directory\\
+`write_filtered_exposure::AbstractString` : write a filtered version of exposure files to specified file name.
+    This file will be tab separated and will only contain columns necessary for further MR Studies.\\
+`filter_beta_raio::Real` : Filter IVs for which the exposure effect is `filter_beta_raio` times outcome effect or greater. default is 0.
 
 ## Examples
 
@@ -584,7 +592,7 @@ function mrStudyTrans(exposure::QTLStudy,
     end
 
     if filter_beta_ratio > 0
-        beta_compare_b(s) = abs(s[2]) ≤ abs(s[1])
+        beta_compare_b(s) = abs(s[2]) / abs(s[1]) ≤ filter_beta_ratio
         filter!(joined_d, [:β_exp, :β_out], type = beta_compare_b, missings = false)
     end
 

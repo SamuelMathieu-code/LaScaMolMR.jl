@@ -40,7 +40,9 @@ Implmentation of naive approach for transcriptome wide MR
     and returns a value of type [`mr_output`](@ref) can be used, that includes user defined functions. 
     Functions already implemented in this module include [`mr_ivw`](@ref), [`mr_egger`](@ref), [`mr_wm`](@ref)
     and [`mr_wald`](@ref). default value is `[mr_ivw, mr_egger]` \\
-`α:AbstractFloat` : α value for confidance intervals of parameter estimations in MR (e.g. 95% CI is α = 0.05, which is the default value)
+`α:AbstractFloat` : α value for confidance intervals of parameter estimations in MR (e.g. 95% CI is α = 0.05, which is the default value) \\
+`write_ivs::AbstractString` : write selected Instrumental variables to specified directory
+
 
 ## Examples :
 
@@ -168,7 +170,8 @@ Implmentation of naive approach for Trans Omic-wide MR
     and returns a value of type [`mr_output`](@ref) can be used, that includes user defined functions. 
     Functions already implemented in this module include [`mr_ivw`](@ref), [`mr_egger`](@ref), [`mr_wm`](@ref)
     and [`mr_wald`](@ref). default value is `[mr_ivw, mr_egger]` \\
-`α:AbstractFloat` : α value for confidance intervals of parameter estimations in MR (e.g. 95% CI is α = 0.05, which is the default value)
+`α:AbstractFloat` : α value for confidance intervals of parameter estimations in MR (e.g. 95% CI is α = 0.05, which is the default value)\\
+`write_ivs::AbstractString` : write selected Instrumental variables to specified directory
 
 ## Examples :
 
