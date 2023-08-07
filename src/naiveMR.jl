@@ -2,7 +2,6 @@ using InMemoryDatasets
 using DLMReader
 using SnpArrays
 using Base.Threads
-using ThreadPools
 using Statistics
 using DLMReader
 
@@ -36,7 +35,7 @@ Implmentation of naive approach for transcriptome wide MR
 
 `one_file_per_chr_plink::Bool` : If true, it is considered that the each index in GenotypesArr corresponds to a chromosome number (default is true) \\
 `r2_tresh::AbstractFloat` : The maximal r² correlation coefficient for two snps to be considered independant. (default is 0.1) \\
-`mr_methodsV::AbstractVector{Function}`: Functions to use to estimate effect of exposure on outcome.
+`mr_methods::AbstractVector{Function}`: Functions to use to estimate effect of exposure on outcome.
     Any Function taking four vectors of same length (βoutcome, se_outcome, βexposure, se_exposure) and a Float (α) 
     and returns a value of type [`mr_output`](@ref) can be used, that includes user defined functions. 
     Functions already implemented in this module include [`mr_ivw`](@ref), [`mr_egger`](@ref), [`mr_wm`](@ref)
@@ -52,7 +51,7 @@ res_d = NaiveCis(d, GenotypesArr, r2_tresh = 0.1)
 function NaiveCis(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{SnpData}; 
                   one_file_per_chr_plink::Bool = true,
                   r2_tresh::AbstractFloat = 0.1,
-                  mr_methodsV::AbstractVector{Function} = [mr_ivw, mr_egger],
+                  mr_methods::AbstractVector{Function} = [mr_ivw, mr_egger],
                   α::AbstractFloat = 0.05,
                   write_ivs::Union{AbstractString, Nothing} = nothing
                   )::Dataset
@@ -65,10 +64,10 @@ function NaiveCis(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{Sn
     end
 
     # make header for final result Dataset
-    ncol = NOut*length(mr_methodsV)
+    ncol = NOut*length(mr_methods)
     mr_names = Vector{String}(undef, ncol)
     @inbounds for i in 1:ncol
-        n = mr_methodsV[div(i, NOut, RoundUp)]
+        n = mr_methods[div(i, NOut, RoundUp)]
         if haskey(mrNamesDict, n)
             mr_names[i] = mrNamesDict[n]
         else
@@ -76,7 +75,7 @@ function NaiveCis(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{Sn
         end
     end
 
-    fields = repeat(collect(string.(fieldnames(mr_output))), length(mr_methodsV))
+    fields = repeat(collect(string.(fieldnames(mr_output))), length(mr_methods))
     header = ["exposure_name"; mr_names .* fields; "f_min_iv"; "f_max_iv"; "f_med_ivs"]
 
 
@@ -85,7 +84,7 @@ function NaiveCis(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{Sn
     end
 
     # for outputs
-    outputArr = Array{Float64}(undef, length(eachgroup(data)), NOut * length(mr_methodsV))
+    outputArr = Array{Float64}(undef, length(eachgroup(data)), NOut * length(mr_methods))
     f_arr = Array{Float64}(undef, length(eachgroup(data)), 3)
     exposureNamesV = Vector{String}(undef, length(eachgroup(data)))
 
@@ -130,7 +129,7 @@ function NaiveCis(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{Sn
         end
 
         # make mr methods and write ouput in dataset
-        @threads for (j, mr_method) in collect(enumerate(mr_methodsV))
+        @threads for (j, mr_method) in collect(enumerate(mr_methods))
             if size(ivs_d, 1) > 0
                 res = mr_method(β_out, se_out, β_exp, se_exp, α)
             else
@@ -164,7 +163,7 @@ Implmentation of naive approach for Trans Omic-wide MR
 
 `one_file_per_chr_plink::Bool` : If true, it is considered that the each index in GenotypesArr corresponds to a chromosome number (default is true) \\
 `r2_tresh::AbstractFloat` : The maximal r² correlation coefficient for two snps to be considered independant. (default is 0.1) \\
-`mr_methodsV::AbstractVector{Function}`: Functions to use to estimate effect of exposure on outcome.
+`mr_methods::AbstractVector{Function}`: Functions to use to estimate effect of exposure on outcome.
     Any Function taking four vectors of same length (βoutcome, se_outcome, βexposure, se_exposure) and a Float (α) 
     and returns a value of type [`mr_output`](@ref) can be used, that includes user defined functions. 
     Functions already implemented in this module include [`mr_ivw`](@ref), [`mr_egger`](@ref), [`mr_wm`](@ref)
@@ -180,7 +179,7 @@ res_d = NaiveTrans(d, GenotypesArr, r2_tresh = 0.1)
 function NaiveTrans(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{SnpData}; 
                   one_file_per_chr_plink::Bool = true,
                   r2_tresh::AbstractFloat = 0.1,
-                  mr_methodsV::AbstractVector{Function} = [mr_egger, mr_ivw],
+                  mr_methods::AbstractVector{Function} = [mr_egger, mr_ivw],
                   α::AbstractFloat = 0.05,
                   write_ivs::Union{Nothing, AbstractString} = nothing
                   )::Dataset
@@ -193,10 +192,10 @@ function NaiveTrans(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{
     end
 
     # make header for final result Dataset
-    ncol = NOut*length(mr_methodsV)
+    ncol = NOut*length(mr_methods)
     mr_names = Vector{String}(undef, ncol)
     @inbounds for i in 1:ncol
-        n = mr_methodsV[div(i, NOut, RoundUp)]
+        n = mr_methods[div(i, NOut, RoundUp)]
         if haskey(mrNamesDict, n)
             mr_names[i] = mrNamesDict[n]
         else
@@ -204,7 +203,7 @@ function NaiveTrans(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{
         end
     end
 
-    fields = repeat(collect(string.(fieldnames(mr_output))), length(mr_methodsV))
+    fields = repeat(collect(string.(fieldnames(mr_output))), length(mr_methods))
     header = ["exposure_name"; mr_names .* fields; "f_min_iv"; "f_max_iv"; "f_med_ivs"]
 
 
@@ -213,7 +212,7 @@ function NaiveTrans(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{
     end
 
     # for outputs
-    outputArr = Array{Float64}(undef, length(eachgroup(data)), NOut * length(mr_methodsV))
+    outputArr = Array{Float64}(undef, length(eachgroup(data)), NOut * length(mr_methods))
     f_arr = Array{Float64}(undef, length(eachgroup(data)), 3)
     exposureNamesV = Vector{String}(undef, length(eachgroup(data)))
 
@@ -273,7 +272,7 @@ function NaiveTrans(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{
         end
 
         # make mr methods and write ouput in dataset
-        @threads for (j, mr_method) in collect(enumerate(mr_methodsV))
+        @threads for (j, mr_method) in collect(enumerate(mr_methods))
             if size(ivs_d, 1) > 0
                 res = mr_method(β_out, se_out, β_exp, se_exp, α)
             else

@@ -11,7 +11,6 @@ export mrStudyTrans, mrStudyTransNFolds, NaiveTrans
 include("ld.jl")
 include("inputs.jl")
 include("mrPerf.jl")
-include("utils.jl")
 include("naiveMR.jl")
 include("mrStudy.jl")
 # ... others to come

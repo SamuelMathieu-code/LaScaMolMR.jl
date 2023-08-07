@@ -3,7 +3,6 @@ using GLM
 using LinearAlgebra
 using Random
 using Statistics
-using LoopVectorization
 
 
     ###########################

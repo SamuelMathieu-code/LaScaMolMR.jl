@@ -4,8 +4,6 @@ using Base.Threads
 using SnpArrays
 using Folds
 using Chain
-using ThreadPools
-using StatsBase
 using PooledArrays
 
     ########################
@@ -329,7 +327,7 @@ function mrStudyCis(exposure::QTLStudy,
     l_unique_traits = length(unique(exposure.traits_for_each_path))
     if approach ∉ ["strict", "naive", "test", "test-strict"] throw(ArgumentError("approach must be either : strict, naive, test or test-strict")) end
     if (approach != "naive" || length(exposure.path_v) < 10) && low_ram 
-        @warn "low_ram option in mrStudyCis with approach different from \"naive\" or less than 10 files in QTLStudy will not be considered. \
+        @warn "low_ram option in mrStudyCis with approach different from \"naive\" or less than 10 files in QTLStudy will not be considered. 
         Pay attention to Memory state." 
     end
 
