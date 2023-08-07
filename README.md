@@ -181,7 +181,7 @@ out = mr_wm(beta_outcome, se_outcome, beta_exposure, se_exposure;
 
 ## Example 4 : mr_output standard functions :
 
-The mr_output struct provies a standard interface to functions performing mendelian randomization. This allows for user to use its own MR functions for mrStudies. Any function receiving 4 vectors and having at least $\apha$ as an option. Such a function should return an mr_output object.
+The mr_output struct provies a standard interface to functions performing mendelian randomization. This allows for user to use its own MR functions for mrStudies. Any function receiving 4 vectors and having at least $\alpha$ as an option. Such a function should return an mr_output object.
 
 Here is the sefinitioin of mr_output :
 
