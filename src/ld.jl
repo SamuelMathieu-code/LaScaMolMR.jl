@@ -1,10 +1,11 @@
-using SnpArrays
+using SnpArrays # To read PLINK 1.9 .bim .bed .fam files. 
 import IterTools.subsets
 using LinearAlgebra
 using Base.Threads
 
 ########## Genotypes in Plink .bed format #########
 
+### Macros describing the PLINK 1.9 .bed file format are for code readability
 macro HOMO_M()  # AA
     return :(0x00)
 end
@@ -21,7 +22,7 @@ end
 ############ LD calculations ############
 
 
-# LD r² composite of pair of SNPs
+# LD r² composite of pair of SNPs from two 1 dimension BitArrays
 @inline function ld_r²(s1, s2)::Float64
     n = 0
     
@@ -169,8 +170,8 @@ function clump(ref_genotypes::SnpData,
                 @inbounds if indx_v_b[j]
                     s1 = @view ref_genotypes.snparray[:, snps_indx[i]]
                     s2 = @view ref_genotypes.snparray[:, snps_indx[j]]
-                    if ld_r²(s1, s2) > r2_tresh                         # !(abs(snps[i][2] - snps[j][2]) > 1_000_000) && ld_r²(s1, s2) > r2_tresh
-                            indx_v_b[j] = false
+                    if ld_r²(s1, s2) > r2_tresh                         # !(abs(snps[i][2] - snps[j][2]) > 1_000_000) && ld_r²(s1, s2) > r2_tresh 
+                            indx_v_b[j] = false                         # -> do not calculate if distance is more than 1Mbp
                     end
                 end
             end

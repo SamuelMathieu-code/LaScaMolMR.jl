@@ -1,18 +1,12 @@
-<div align="center">
+# LaScaMolMR.jl
 
-# LaScaMol MR
-
-[![Build Status](https://github.com/SamuelMathieu-code/MrPainter.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/SamuelMathieu-code/MrPainter.jl/actions/workflows/CI.yml?query=branch%3Amain)
-
-</div>
-
-## Overview
+# Overview 
 
 LaScaMolMR.jl (Large Scale Molecular Mendelian Randomization) is a threaded Mendelian Randomization (MR) package that is focused on the generation of transcriptome wide / molecular MR analysies. Although it provides interface for most common MR regression estimators (Inverse Variance Weighted, Weighted Median, Egger, Wald), its intended use is to enable fast Omic-wide Mendelian Randomization studies. The rise of large genetic cohort data has benefited the statistical power of Genome Wide Association Studies (GWAS) and Quantitative Trait Loci (QTL). Thus enabling findings in extensive studies such as Transcriptome Wide MR (TWMR), or mediation analyses between different levels of phenotypes ([Porcu et al.](https://elifesciences.org/articles/81097)). LaScaMolMR.jl provides a fast and efficient framework (still under developpement) to such analyses, allowing users to test different parameters.
 
-## Usage
+# Usage
 
-### Example 1 : Cis-MR
+## Example 1 : Cis-MR
 
 For a QTL dataset composed as follows :
 
@@ -106,7 +100,7 @@ end
 table_mr_results = NaiveCis(potential_ivs, genotypes, mr_methods = [mr_ivw, mr_wald])
 ```
 
-### Example 2 : Trans-MR
+## Example 2 : Trans-MR
 
 For a QTL dataset composed as follows :
 
@@ -178,7 +172,7 @@ out_table2 = mrStudyTrans(exposure, outcome, plink_files,
 # rendered outputs and the MR methods used (see documentation for detailed information)
 ```
 
-### Example 3 : QTL pairs in MR *(Only works for Cis as exposure for now)*
+## Example 3 : QTL pairs in MR *(Only works for Cis as exposure for now)*
 
 To do investigate all pairs of QTLs between two QTL Studies, iterations over instances of `QTLStudy` will generate GWAS instances which can be passed to LaScaMol's other functions.
 
@@ -190,7 +184,7 @@ for metabolite in mQTL
 end
 ```
 
-### `mr_*` regression functions
+## `mr_*` regression functions
 
 LaScaMolMR provides four MR regression functions : `mr_wald`, `mr_ivw`, `mr_egger` and `mr_wm` performing respectively the wald ratio of the first provided instrument, Inverse Variance Weighted, Egger and Weighted Median regressions.
 
@@ -201,7 +195,7 @@ out = mr_wm(beta_outcome, se_outcome, beta_exposure, se_exposure;
             iteration = 10000, seed = 42)
 ```
 
-### mr_output standard functions :
+## mr_output standard functions :
 
 The mr_output struct provies a standard interface to functions performing mendelian randomization. This allows for user to use its own MR functions for mrStudies. Any function receiving 4 vectors and having at least $\alpha$ as an option. Such a function should return an mr_output object.
 
@@ -224,7 +218,7 @@ struct mr_output
 end
 ```
 
-Any function following this format will could be provided to NaiveCis/NaiveTrans/mrStudyCis/mrStudyTrans ;
+Any function following the following format could be provided to NaiveCis/NaiveTrans/mrStudyCis/mrStudyTrans ;
 
 ```julia
 function mr_something(beta_outcome, se_outcome, beta_exposure, se_exposure; 
@@ -243,22 +237,66 @@ end
 output = NaiveCis(data, genotypes; mr_methods = [mr_ivw, mr_something])
 ```
 
+# Contents
 
-## Further improvements
+```@contents
+```
 
-<span style="color:green">
-<b>implemented </b>
-</span> :
+# API
 
-- inputs : modular inputs of GWAS and QTL studies.
-- ld : computation of the ld composite
-- MrPref : implementation of heterogeneity tests and iv-regression methods.
-- mrStudyCis, mrStudyTrans, NaiveCis, NaiveTrans : Implemenation of IV selection in cis- and trans-. Supports both strict and naive aproaches for internal pleiotropy.
+## Inputs
 
-<span style="color:purple">
-<b>enventualities </b>
-</span> :
+```@docs
+GenVarInfo
 
-- ReverseMR : Reverse causality investigation
-- PlotsMR : Graphical illustration of the results of an MR study
-- add option to remove missense exonic variants (prots with aptamers)
+GWAS
+
+QTLStudy
+
+QTLStudy_from_pattern
+
+nfolds
+```
+
+## Linkage Desiquilibrium
+
+```@docs
+formatSnpData!
+
+clump
+```
+
+## Mendelian Randomization
+
+```@docs
+mr_output
+
+mr_wald
+
+mr_ivw
+
+mr_egger
+
+mr_wm
+```
+
+## MR Study
+
+```@docs
+mrStudyCis
+
+mrStudyCisNFolds
+
+NaiveCis
+
+mrStudyTrans
+
+mrStudyTransNFolds
+
+NaiveTrans
+```
+
+# Index
+
+```@index
+```
