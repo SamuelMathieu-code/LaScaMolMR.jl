@@ -10,7 +10,7 @@
 
 LaScaMolMR.jl (Large Scale Molecular Mendelian Randomization) is a threaded Mendelian Randomization (MR) package that is focused on the generation of transcriptome wide / molecular MR analysies. Although it provides interface for most common MR regression estimators (Inverse Variance Weighted, Weighted Median, Egger, Wald), its intended use is to enable fast Omic-wide Mendelian Randomization studies. The rise of large genetic cohort data has benefited the statistical power of Genome Wide Association Studies (GWAS) and Quantitative Trait Loci (QTL). Thus enabling findings in extensive studies such as Transcriptome Wide MR (TWMR), or mediation analyses between different levels of phenotypes ([Porcu et al.](https://elifesciences.org/articles/81097)). LaScaMolMR.jl provides a fast and efficient framework (still under developpement) to such analyses, allowing users to test different parameters.
 
-## Usage
+## Tutorial
 
 ### Example 1 : Cis-MR
 
@@ -178,18 +178,6 @@ out_table2 = mrStudyTrans(exposure, outcome, plink_files,
 # rendered outputs and the MR methods used (see documentation for detailed information)
 ```
 
-### Example 3 : QTL pairs in MR *(Only works for Cis as exposure for now)*
-
-To do investigate all pairs of QTLs between two QTL Studies, iterations over instances of `QTLStudy` will generate GWAS instances which can be passed to LaScaMol's other functions.
-
-```julia
-out_all = Dict{String, Dataset}()
-for metabolite in mQTL
-    out = mrStudyCis(eQTL, metabolite, plink_files)
-    out_all[metabolite.trait_name] = out
-end
-```
-
 ### `mr_*` regression functions
 
 LaScaMolMR provides four MR regression functions : `mr_wald`, `mr_ivw`, `mr_egger` and `mr_wm` performing respectively the wald ratio of the first provided instrument, Inverse Variance Weighted, Egger and Weighted Median regressions.
@@ -262,3 +250,10 @@ output = NaiveCis(data, genotypes; mr_methods = [mr_ivw, mr_something])
 - ReverseMR : Reverse causality investigation
 - PlotsMR : Graphical illustration of the results of an MR study
 - add option to remove missense exonic variants (prots with aptamers)
+
+## TODO
+
+- Meilleure itération et indexing sur QTLStudy object -> conforme à un futur reverse MR
+- Remettre de l'ordre dans les using statements -> insode module LaScaMolMR à LaScaMolMR.jl
+- Constructeurs de struct définis à l'inérieur du struct ? -> s'inspirer d'autres packages pour la forme de façon à suivre les conventions établies.
+- ...? Autres changements à venir en vue d'un premier Release?

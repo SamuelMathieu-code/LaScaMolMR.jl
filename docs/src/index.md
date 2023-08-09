@@ -4,7 +4,7 @@
 
 LaScaMolMR.jl (Large Scale Molecular Mendelian Randomization) is a threaded Mendelian Randomization (MR) package that is focused on the generation of transcriptome wide / molecular MR analysies. Although it provides interface for most common MR regression estimators (Inverse Variance Weighted, Weighted Median, Egger, Wald), its intended use is to enable fast Omic-wide Mendelian Randomization studies. The rise of large genetic cohort data has benefited the statistical power of Genome Wide Association Studies (GWAS) and Quantitative Trait Loci (QTL). Thus enabling findings in extensive studies such as Transcriptome Wide MR (TWMR), or mediation analyses between different levels of phenotypes ([Porcu et al.](https://elifesciences.org/articles/81097)). LaScaMolMR.jl provides a fast and efficient framework (still under developpement) to such analyses, allowing users to test different parameters.
 
-# Usage
+# Tutorial
 
 ## Example 1 : Cis-MR
 
@@ -172,19 +172,7 @@ out_table2 = mrStudyTrans(exposure, outcome, plink_files,
 # rendered outputs and the MR methods used (see documentation for detailed information)
 ```
 
-## Example 3 : QTL pairs in MR *(Only works for Cis as exposure for now)*
-
-To do investigate all pairs of QTLs between two QTL Studies, iterations over instances of `QTLStudy` will generate GWAS instances which can be passed to LaScaMol's other functions.
-
-```julia
-out_all = Dict{String, Dataset}()
-for metabolite in mQTL
-    out = mrStudyCis(eQTL, metabolite, plink_files)
-    out_all[metabolite.trait_name] = out
-end
-```
-
-## `mr_*` regression functions
+# `mr_*` regression functions
 
 LaScaMolMR provides four MR regression functions : `mr_wald`, `mr_ivw`, `mr_egger` and `mr_wm` performing respectively the wald ratio of the first provided instrument, Inverse Variance Weighted, Egger and Weighted Median regressions.
 
@@ -195,7 +183,7 @@ out = mr_wm(beta_outcome, se_outcome, beta_exposure, se_exposure;
             iteration = 10000, seed = 42)
 ```
 
-## mr_output standard functions :
+# `mr_output` as a standard output for `mr_*` :
 
 The mr_output struct provies a standard interface to functions performing mendelian randomization. This allows for user to use its own MR functions for mrStudies. Any function receiving 4 vectors and having at least $\alpha$ as an option. Such a function should return an mr_output object.
 
@@ -218,7 +206,8 @@ struct mr_output
 end
 ```
 
-Any function following the following format could be provided to NaiveCis/NaiveTrans/mrStudyCis/mrStudyTrans ;
+Any function following the following format could be provided to [`NaiveCis`](@ref)/[`NaiveTrans`](@ref)/[`mrStudyCis`](@ref)/[`mrStudyTrans`](@ref) inside `mr_methods`,
+including user-defined functions.
 
 ```julia
 function mr_something(beta_outcome, se_outcome, beta_exposure, se_exposure; 

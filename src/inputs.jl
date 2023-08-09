@@ -15,6 +15,8 @@ end
 """
 Enum of different information present in qtl file path or inside QTL/GWAS text delimited files.
 
+**values :**
+
 ```
 TRAIT_NAME  # Name of the trait (e.g. QTL protein name)
 CHR         # chromosome
@@ -49,9 +51,9 @@ Type GWAS which contains informations about GWAS file
 
 ```
 path        # path to file
-columns     # Dictionary of informations contained in columns of file 
+columns     # Dictionary of column number => GenVarInfo type of info at column
 separator   # column separator
-trait_name  # name of the trait (optional)
+trait_name  # name of the trait (nothing if not specified)
 ```
 ## Example
 
@@ -77,6 +79,18 @@ GWAS(path,
 Type QTLStudy which contains informations about QTL file(s) format and implacement.
 
 The method [`QTLStudy_from_pattern`](@ref) helps building information from patterns in file names and is the prefered methods to construct a QTLStudy.
+
+**fields :**
+
+```
+path_v                  # vector of file names (path)
+traits_for_each_path    # Trait corrpespondinf to each path (nothing if files are not trait specific)
+trait_v                 # names of all traits included
+chr_v                   # chromosomes corresponding to each trait (nothing if not relevant)
+tss_v                   # tss position corresponding to each trait (nothing if not relevant)
+columns                 # Dictionary of column number => GenVarInfo type of info at column
+separator               # column separator
+```
 """
 mutable struct QTLStudy
     path_v::Vector{S1} where S1 <: Union{Missing, AbstractString}
@@ -106,7 +120,7 @@ QTLStudy(path::String,
 """
 Make QTLStudy which contains informations about QTL file(s) format and implacement from some file pattern
 
-arguments :
+**arguments :**
 
 `folder` is the main folder cntaining all QTL files. \\
 `path_pattern` is a vector of strngs and GenVarInfo characterizing the pattern of every file name in the folder. \\
@@ -115,7 +129,8 @@ arguments :
 `tss_v` is a vector of every Transcription start site. \\
 `columns` is a dictionary of all informations contained in columns of QTL files. \\
 `separator` is the separator of QTL files. \\
-`only_corresp_chr` indicates if only variants on chromosome correspoding to QTL trait should be kept. Default is `true`
+`only_corresp_chr` indicates if only variants on chromosome correspoding to QTL trait should be kept. Default is `true`. 
+    Set to `false` for Trans MR studies.
 
 TIP : if your file contains a chromosome:position column (e.g. 1:324765), consider setting your separator to `[':', sep]`
 
