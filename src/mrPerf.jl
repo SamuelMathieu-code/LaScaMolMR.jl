@@ -170,6 +170,10 @@ currently waiting for GLM.jl PR#487 to be merged to use analytical weights inste
 `se_β_X` : vector of standard error for exposure effect sizes
 `α` : α value for confidence intervals (default is 0.05)
 
+**options :**
+
+`model::Symbol` : `:random`, `:fixed` or `:default` effect type. `:default` is fixed if less than 4 ivs, random otherwise.
+
 """
 function mr_ivw(β_Y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
                 se_β_Y::AbstractVector{<: Union{AbstractFloat, Missing}}, 
@@ -305,6 +309,7 @@ Weighted Median Mendelian Randomization (Bowden et al., 2015)
 `α` : α value for confidence intervals (default is 0.05)
 
 **options :**
+
 `iterations` : number of iterations for estimate of standrard error or effect size.
 `seed` : seed of random generator
 """

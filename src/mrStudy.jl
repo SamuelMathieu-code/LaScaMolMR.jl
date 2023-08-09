@@ -5,6 +5,7 @@ using SnpArrays
 using Folds
 using Chain
 using PooledArrays
+using StatsBase
 
     ########################
     #       Constants      #
@@ -73,47 +74,70 @@ function make_types_and_headers(file::Union{QTLStudy, GWAS};
     return types, header
 end
 
-# verify columns make sense and simplify repeating elements (modifies the columns field of QTLStudy/GWAS)
-function verify_and_simplify_columns!(exposure::Union{QTLStudy, GWAS})
+# verify columns don't miss information
+function verify_columns(study::QTLStudy, is_exposure::Bool = true)
 
-    if exposure isa QTLStudy
-        trait_each_path_nothing =  nothing in exposure.traits_for_each_path
-        if trait_each_path_nothing && !(TRAIT_NAME in values(exposure.columns))
-            throw(ArgumentError("exposure misses TRAIT_NAME information"))
-        end
-        gen_infos = [CHR, POS, BETA, SE, A_EFFECT, A_OTHER, PVAL, TRAIT_NAME]
+    if is_exposure
+        gen_infos = Set((CHR, POS, BETA, SE, A_EFFECT, A_OTHER, PVAL, TRAIT_NAME))
     else
-        trait_each_path_nothing = false
-        gen_infos = [CHR, POS, BETA, SE, A_EFFECT, A_OTHER]
+        gen_infos = Set((CHR, POS, BETA, SE, A_EFFECT, A_OTHER, TRAIT_NAME))
     end
 
-    # Treating exposure
-    # keep only columns and verify all columns are satisfied 
-    new_cols_exposure::Dict{Int, GenVarInfo} = Dict()
     cols_ok = Dict{GenVarInfo, Bool}(CHR => 0,
                    POS => 0,
                    BETA => 0,
                    SE => 0,
-                   PVAL => (exposure isa GWAS) ? 1 : 0,
+                   PVAL => 0,
                    A_EFFECT => 0,
                    A_OTHER => 0,
-                   TRAIT_NAME => (!trait_each_path_nothing) ? 1 : 0)
+                   TRAIT_NAME => !(nothing in study.traits_for_each_path))
 
-    for key in keys(exposure.columns)
-        for info in gen_infos
-            if exposure.columns[key] == info
-                cols_ok[info] = 1
-                new_cols_exposure[key] = info
-            end
-        end
+    for value in values(study.columns)
+        cols_ok[value] = 1
     end
 
-    for key in keys(cols_ok)
+    for key in gen_infos
         if cols_ok[key] == 0
-            throw(ArgumentError("Missing information in columns. GWAS/QTL Should contain at least : CHR, POS, A_EFFECT, A_OTHER, BETA, SE, PVAL."))
+            throw(ArgumentError("Missing $(key) in columns. GWAS/QTL Should contain at least : CHR, POS, A_EFFECT, A_OTHER, BETA, SE, PVAL."))
         end
     end
-    exposure.columns = new_cols_exposure
+
+    all_infos = values(study.columns)
+    if length(all_infos) != length(unique(all_infos))
+        throw(ArgumentError("There are repeating elements in columns. Make sure to specify only one column number per GenVarInfo type."))
+    end
+end
+
+
+function verify_columns(study::GWAS, is_exposure::Bool = false)
+    if is_exposure
+        gen_infos = Set((CHR, POS, BETA, SE, A_EFFECT, A_OTHER, PVAL))
+    else
+        gen_infos = Set((CHR, POS, BETA, SE, A_EFFECT, A_OTHER))
+    end
+
+    cols_ok = Dict{GenVarInfo, Bool}(CHR => 0,
+                   POS => 0,
+                   BETA => 0,
+                   SE => 0,
+                   PVAL => 0,
+                   A_EFFECT => 0,
+                   A_OTHER => 0)
+
+    for value in values(study.columns)
+        cols_ok[value] = 1
+    end
+
+    for key in gen_infos
+        if cols_ok[key] == 0
+            throw(ArgumentError("Missing $(key) in columns. GWAS/QTL Should contain at least : CHR, POS, A_EFFECT, A_OTHER, BETA, SE, PVAL and TRAIT_NAME if necessary."))
+        end
+    end
+
+    all_infos = values(study.columns)
+    if length(all_infos) != length(unique(all_infos))
+        throw(ArgumentError("There are repeating elements in columns. Make sure to specify only one column number per GenVarInfo type."))
+    end
 end
 
 
@@ -227,9 +251,13 @@ Perform Cis-Mendelian Randomization study from QTL to GWAS and separating exposu
 `outcome::GWAS` : outcome gas data \\
 `bedbimfam_dirnames::AbstractArray{<:AbstractString}` : base names of Plink bedbimfam files for reference genotypes 
     (see [SnpArrays documentation](https://openmendel.github.io/SnpArrays.jl/latest/))\\
+
+
+**options :**
+
 `n_folds::Integer` : Number f folds to separate QTl into.
 
-see [`mrStudyCis`](@ref) for options and examples.
+see [`mrStudyCis`](@ref) for other options and examples.
 """
 function mrStudyCisNFolds(exposure::QTLStudy, 
                            outcome::GWAS, 
@@ -283,7 +311,7 @@ Perform a Cis-Mendelian Randomization study with exposure QTL and outcome GWAS
 `bedbimfam_dirnames::AbstractArray{<:AbstractString}` : base names of Plink bedbimfam files for reference genotypes 
     (see [SnpArrays documentation](https://openmendel.github.io/SnpArrays.jl/latest/))\\
 
-**options :**
+**options :**\\
 
 `approach::String`: name of MR study aproach chosen (either naive, test or strict) (default is "naive")\\
 `p_tresh::Float64`: pvalue threshold for a SNP to be considered associated to an exposure (default is 1e-3)\\
@@ -298,7 +326,7 @@ Perform a Cis-Mendelian Randomization study with exposure QTL and outcome GWAS
 `α::Float64` : α value for confidance intervals of parameter estimations in MR (e.g. 95% CI is α = 0.05, which is the default value)\\
 `trsf_pval_exp::Union{Function, Nothing}` : Transformation to apply to pvalues in exposure dataset\\
 `trsf_pval_out::Union{Function, Nothing}` : t = Transormation to apply on pvalues in outcome dataset\\
-`low_ram::Bool` : If true, if the exposure files each contain only one exposure trait, [`mrStudyCisNFolds`](@ref) with n_folds of 10 will be used.\\
+`low_ram::Bool` : If true, if the exposure files each contain only one exposure trait, [`mrStudyCisNFolds`](@ref) with `n_folds` of 10 will be used.\\
 `write_ivs::AbstractString` : write selected Instrumental variables to specified directory\\
 `write_filtered_exposure::AbstractString` : write a filtered version of exposure files to specified file name.
     This file will be tab separated and will only contain columns necessary for further MR Studies.
@@ -349,10 +377,12 @@ function mrStudyCis(exposure::QTLStudy,
                                  α = α,
                                  trsf_pval_exp = trsf_pval_exp,
                                  trsf_pval_out = trsf_pval_out,
-                                 pval_bigfloat = pval_bigfloat)
+                                 pval_bigfloat = pval_bigfloat,
+                                 write_filtered_exposure = write_filtered_exposure,
+                                 write_ivs = write_ivs)
     end 
     #load and filter qtl data (filter for significan snps to exposure and within specified window)
-    verify_and_simplify_columns!(exposure)
+    verify_columns(exposure)
     types, header = make_types_and_headers(exposure; pval_bigfloat = pval_bigfloat)
     qtl_d = read_qtl_files_cis(exposure, types, header, window, p_tresh, exposure_filtered, trsf_pval_exp)
 
@@ -361,7 +391,7 @@ function mrStudyCis(exposure::QTLStudy,
     end
     
     # load gwas data
-    verify_and_simplify_columns!(outcome)
+    verify_columns(outcome)
     types, header = make_types_and_headers(outcome)
     gwas_d = filereader(outcome.path, 
                     delimiter = outcome.separator, 
@@ -374,6 +404,11 @@ function mrStudyCis(exposure::QTLStudy,
     end
     # change gwas a_effect_out a_other_out to a Pooled array to save memory
     modify!(gwas_d, [:a_effect_out, :a_other_out] => (PooledArray ∘ x -> lowercase.(x)))
+
+    if size(gwas_d, 1) == 0 || size(qtl_d, 1) == 0
+        @warn "No IVS were found with given parameters."
+        return Dataset()
+    end
 
     # keep only biallelic snps
     biallelic(s::SubArray) = (s[1]==s[2] && s[3] == s[4]) || (s[1] == s[4] && s[2] == s[3])
@@ -404,7 +439,7 @@ function mrStudyCis(exposure::QTLStudy,
 
     #### for d in eachgroup(joined_d) -> Plink + MR (implemented in NaiveCis)
     if approach == "naive" || approach == "strict"
-        return NaiveCis(joined_d, GenotypesArr, r2_tresh = r2_tresh, one_file_per_chr_plink = one_file_per_chr_plink, mr_methodsV = mr_methods, α = α, write_ivs = write_ivs)
+        return NaiveCis(joined_d, GenotypesArr, r2_tresh = r2_tresh, one_file_per_chr_plink = one_file_per_chr_plink, mr_methods = mr_methods, α = α, write_ivs = write_ivs)
     else
         return joined_d
     end
@@ -429,9 +464,12 @@ Perform Trans-Mendelian Randomization study from QTL to GWAS and separating expo
 `outcome::GWAS` : outcome gas data \\
 `bedbimfam_dirnames::AbstractArray{<:AbstractString}` : base names of Plink bedbimfam files for reference genotypes 
     (see [SnpArrays documentation](https://openmendel.github.io/SnpArrays.jl/latest/))\\
+
+**options :**
+
 `n_folds::Integer` : Number f folds to separate QTl into.
 
-see [`mrStudyCis`](@ref) for options and examples.
+see [`mrStudyCis`](@ref) for other options and examples.
 """
 function mrStudyTransNFolds(exposure::QTLStudy, 
                            outcome::GWAS, 
@@ -485,7 +523,8 @@ Perform a Trans-Mendelian Randomization study with exposure QTL and outcome GWAS
 `bedbimfam_dirnames::AbstractArray{<:AbstractString}` : base names of Plink bedbimfam files for reference genotypes 
     (see [SnpArrays documentation](https://openmendel.github.io/SnpArrays.jl/latest/))\\
 
-**options : ** \\
+**options :** \\
+
 `approach::String`: name of MR study aproach chosen (either naive, test or strict) (default is "naive")\\
 `p_tresh::Float64`: pvalue threshold for a SNP to be considered associated to an exposure (default is 1e-3)\\
 `r2_tresh::Float64`: maximial corrlation between to SNPs (default is 0.1)\\
@@ -498,7 +537,7 @@ Perform a Trans-Mendelian Randomization study with exposure QTL and outcome GWAS
 `α::Float64` : α value for confidance intervals of parameter estimations in MR (e.g. 95% CI is α = 0.05, which is the default value)\\
 `trsf_pval_exp::Union{Function, Nothing}` : Transformation to apply to pvalues in exposure dataset\\
 `trsf_pval_out::Union{Function, Nothing}` : t = Transormation to apply on pvalues in outcome dataset\\
-`low_ram::Bool` : If true, if the exposure files each contain only one exposure trait, [`mrStudyCisNFolds`](@ref) with n_folds of 10 will be used.
+`low_ram::Bool` : If true, if the exposure files each contain only one exposure trait, [`mrStudyCisNFolds`](@ref) with `n_folds` of 10 will be used.
 `write_ivs::AbstractString` : write selected Instrumental variables to specified directory\\
 `write_filtered_exposure::AbstractString` : write a filtered version of exposure files to specified file name.
     This file will be tab separated and will only contain columns necessary for further MR Studies.\\
@@ -549,10 +588,12 @@ function mrStudyTrans(exposure::QTLStudy,
                                  trsf_pval_exp = trsf_pval_exp,
                                  trsf_pval_out = trsf_pval_out,
                                  pval_bigfloat = pval_bigfloat,
-                                 filter_beta_ratio = filter_beta_ratio)
+                                 filter_beta_ratio = filter_beta_ratio,
+                                 write_filtered_exposure = write_filtered_exposure,
+                                 write_ivs = write_ivs)
     end 
     #load and filter qtl data (filter for significan snps to exposure and within specified window)
-    verify_and_simplify_columns!(exposure)
+    verify_columns(exposure)
     types, header = make_types_and_headers(exposure; pval_bigfloat = pval_bigfloat)
     qtl_d = read_qtl_files_trans(exposure, types, header, p_tresh, exposure_filtered, trsf_pval_exp)
 
@@ -561,7 +602,7 @@ function mrStudyTrans(exposure::QTLStudy,
     end
     
     # load gwas data
-    verify_and_simplify_columns!(outcome)
+    verify_columns(outcome)
     types, header = make_types_and_headers(outcome)
     gwas_d = filereader(outcome.path, 
                         delimiter = outcome.separator, 
@@ -574,6 +615,11 @@ function mrStudyTrans(exposure::QTLStudy,
     end
     # change gwas a_effect_out a_other_out to a Pooled array to save memory
     modify!(gwas_d, [:a_effect_out, :a_other_out] => (PooledArray ∘ x -> lowercase.(x)))
+
+    if size(gwas_d, 1) == 0 || size(qtl_d, 1) == 0
+        @warn "No IVS were found with given parameters."
+        return Dataset()
+    end
 
     # keep only biallelic snps
     biallelic(s::SubArray) = (s[1] == s[2] && s[3] == s[4]) || (s[1] == s[4] && s[2] == s[3])
@@ -609,7 +655,7 @@ function mrStudyTrans(exposure::QTLStudy,
 
     #### for d in eachgroup(joined_d) -> Plink + MR (implemented in NaiveCis)
     if approach == "naive" || approach == "strict"
-        return NaiveTrans(joined_d, GenotypesArr, r2_tresh = r2_tresh, one_file_per_chr_plink = one_file_per_chr_plink, mr_methodsV = mr_methods, α = α, write_ivs = write_ivs)
+        return NaiveTrans(joined_d, GenotypesArr, r2_tresh = r2_tresh, one_file_per_chr_plink = one_file_per_chr_plink, mr_methods = mr_methods, α = α, write_ivs = write_ivs)
     else
         return joined_d
     end

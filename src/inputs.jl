@@ -294,7 +294,7 @@ function Base.iterate(iter::QTLStudy, state)
     return (element, count)
 end
 
-function Base.getindex(iter::QTLStudy, i::Int)
+function Base.getindex(iter::QTLStudy, i::Integer)
     return GWAS(iter.path_v[i], iter.columns, iter.separator, iter.traits_for_each_path[i])
 end
 

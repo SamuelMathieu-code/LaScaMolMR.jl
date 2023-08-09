@@ -144,7 +144,11 @@ function NaiveCis(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{Sn
         f_arr[i, :] = [f_min, f_max, f_med] # F stat for ivs (exposure association force)
 
         if write_ivs !== nothing
-            filewriter(joinpath(write_ivs, data_group.trait[1] * "_ivs.txt"), ivs_d, delimiter = '\t')
+            filewriter(joinpath(write_ivs, data_group.trait[1] * "_ivs.txt"), 
+                       @view(ivs_d[:, [:trait, :chr, :pos, 
+                                       :a_effect_exp, :a_other_exp, :β_exp, :se_exp, :pval_exp, 
+                                       :a_effect_out, :a_other_out, :β_out, :se_out, :pval_out]]),
+                       delimiter = '\t')
         end
     end
 
@@ -288,7 +292,11 @@ function NaiveTrans(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{
         f_arr[i, :] = [f_min, f_max, f_med] # F stat for ivs (exposure association force)
 
         if write_ivs !== nothing
-            filewriter(joinpath(write_ivs, data_group.trait[1] * "_ivs.txt"), ivs_d, delimiter = '\t')
+            filewriter(joinpath(write_ivs, data_group.trait[1] * "_ivs.txt"), 
+                       @view(ivs_d[:, [:trait, :chr, :pos, 
+                                       :a_effect_exp, :a_other_exp, :β_exp, :se_exp, :pval_exp, 
+                                       :a_effect_out, :a_other_out, :β_out, :se_out, :pval_out]]),
+                       delimiter = '\t')
         end
 
     end
