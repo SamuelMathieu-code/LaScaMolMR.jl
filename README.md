@@ -256,4 +256,5 @@ output = NaiveCis(data, genotypes; mr_methods = [mr_ivw, mr_something])
 - Meilleure itération et indexing sur QTLStudy object -> conforme à un futur reverse MR
 - Remettre de l'ordre dans les using statements -> insode module LaScaMolMR à LaScaMolMR.jl
 - Constructeurs de struct définis à l'inérieur du struct ? -> s'inspirer d'autres packages pour la forme de façon à suivre les conventions établies.
+- Changer le loading des SnpData vers Naive? -> évite au user de 'en occuper avec les approches test et test-strict.
 - ...? Autres changements à venir en vue d'un premier Release?
