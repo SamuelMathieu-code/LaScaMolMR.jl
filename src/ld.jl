@@ -19,6 +19,28 @@ macro HOMO_m()  # aa
     return :(0x03)
 end
 
+################## MAF ##################
+
+@inline function maf(s1)::Float64
+    m = n = N = 0
+    @inbounds for i in eachindex(s1)
+        g = s1[i]
+        if g == @HOMO_M
+            N += 2
+            m += 2
+        elseif g == @HOMO_m
+            n += 2
+            m += 2
+        elseif g == @HETER
+            n += 1
+            N +=1
+            m += 2
+        end
+    end
+
+    return min(N/m, n/m)
+end
+
 ############ LD calculations ############
 
 
@@ -143,7 +165,8 @@ See [`formatSnpData!`](@ref).
 function clump(ref_genotypes::SnpData, 
                snps::AbstractVector{<:Tuple{Integer, Integer}}; 
                r2_tresh::AbstractFloat = 0.1,
-               formated = false
+               formated = false,
+               min_maf::Real = 0
                )::Vector{Bool}
     
     if !formated
@@ -156,9 +179,16 @@ function clump(ref_genotypes::SnpData,
     @threads for (i, chr_pos_sing) in collect(enumerate(snps))
         j = searchsorted(ref_genotypes.snp_info.chr_pos, chr_pos_sing) # range valid if of length 1 (> 1 => triallelic, < 1 => not found)
         if length(j) == 1
-            indx_v_b[i] = true
             snps_indx[i] = ref_genotypes.snp_info.idx[j[]]
+
+            # if maf insufficient : discard variant
+            if maf(ref_genotypes.snparray[:, snps_indx[i]]) > min_maf
+                indx_v_b[i] = true
+            else
+                indx_v_b[i] = false
+            end
         else
+            # if variant not biallelic : discard
             indx_v_b[i] = false
         end
     end

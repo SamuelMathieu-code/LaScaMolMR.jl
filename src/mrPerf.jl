@@ -278,12 +278,13 @@ function mr_egger(β_Y::AbstractVector{<: Union{AbstractFloat, Missing}},
     dh = Normal(0, se_θ_est[2])
     dobs = Normal(θ_est[2], se_θ_est[2])
     dintercept = Normal(0, se_θ_est[1])
+    dintercept_obs = Normal(θ_est[1], se_θ_est[1])
     
     θ_ci_low, θ_ci_high = quantile(dobs, α/2), quantile(dobs, 1-α/2)
     p = 2*cdf(dh, -abs(θ_est[2]))
 
     p_intercept = 1 - 2*(cdf(dintercept, -abs(θ_est[1])))
-    ci_low_intercept, ci_high_intercept = quantile(dintercept, α/2), quantile(dintercept, 1-α/2)
+    ci_low_intercept, ci_high_intercept = quantile(dintercept_obs, α/2), quantile(dintercept_obs, 1-α/2)
 
     # heterogeneity
     heter_stat = sum(abs2.(ϵ ./ se_β_Y))

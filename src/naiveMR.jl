@@ -55,7 +55,8 @@ function NaiveCis(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{Sn
                   r2_tresh::AbstractFloat = 0.1,
                   mr_methods::AbstractVector{Function} = [mr_ivw, mr_egger],
                   α::AbstractFloat = 0.05,
-                  write_ivs::Union{AbstractString, Nothing} = nothing
+                  write_ivs::Union{AbstractString, Nothing} = nothing,
+                  min_maf::Real = 0
                   )::Dataset
 
     # Gestion of bedbimfam file sets
@@ -102,13 +103,15 @@ function NaiveCis(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{Sn
             kept_v_b = clump(GenotypesArr[ivs_d.chr[1]], 
                              Vector{Tuple{Int8, Int32}}(collect(zip(ivs_d.chr, ivs_d.pos))), 
                              r2_tresh = r2_tresh, 
-                             formated = true)
+                             formated = true,
+                             min_maf = min_maf)
         else # else take first
             # clump list of potential ivs to only keep independant
             kept_v_b = clump(GenotypesArr[1], 
                              Vector{Tuple{Int8, Int32}}(collect(zip(ivs_d.chr, ivs_d.pos))), 
                              r2_tresh = r2_tresh,
-                             formated = true)
+                             formated = true,
+                             min_maf = min_maf)
         end
 
         ivs_d = ivs_d[kept_v_b, :]
@@ -188,7 +191,8 @@ function NaiveTrans(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{
                   r2_tresh::AbstractFloat = 0.1,
                   mr_methods::AbstractVector{Function} = [mr_egger, mr_ivw],
                   α::AbstractFloat = 0.05,
-                  write_ivs::Union{Nothing, AbstractString} = nothing
+                  write_ivs::Union{Nothing, AbstractString} = nothing,
+                  min_maf::Real = 0
                   )::Dataset
 
     # Gestion of bedbimfam file sets
@@ -251,7 +255,8 @@ function NaiveTrans(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{
             kept_v_b = clump(g, 
                              Vector{Tuple{Int8, Int32}}(collect(zip(ivs_d[ivs_in_chr_idx, :chr], ivs_d[ivs_in_chr_idx, :pos]))), 
                              r2_tresh = r2_tresh, 
-                             formated = true)
+                             formated = true,
+                             min_maf = min_maf)
 
             append!(all_kept_indx, ivs_in_chr_idx[kept_v_b])
 

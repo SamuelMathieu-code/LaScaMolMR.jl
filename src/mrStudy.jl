@@ -274,7 +274,8 @@ function mrStudyCisNFolds(exposure::QTLStudy,
                            trsf_pval_out::Union{Function, Nothing} = nothing,
                            pval_bigfloat::Bool = false,
                            write_ivs::Union{AbstractString, Nothing} = nothing,
-                           write_filtered_exposure::Union{AbstractString, Nothing} = nothing
+                           write_filtered_exposure::Union{AbstractString, Nothing} = nothing,
+                           min_maf::Real = 0
                           )::Union{Dataset, GroupBy}
     if approach != "naive" throw(ArgumentError("aproach should not be strict with mrStudyCisNFolds.")) end
 
@@ -294,7 +295,8 @@ function mrStudyCisNFolds(exposure::QTLStudy,
                                 trsf_pval_out = trsf_pval_out,
                                 pval_bigfloat = pval_bigfloat,
                                 write_ivs = write_ivs,
-                                write_filtered_exposure = write_filtered_exposure))
+                                write_filtered_exposure = write_filtered_exposure,
+                                min_maf = min_maf))
     end
 
     return Folds.reduce(vcat, arr_d, init = Dataset())
@@ -352,7 +354,8 @@ function mrStudyCis(exposure::QTLStudy,
     low_ram::Bool = false, # temporary? if as performant --> set true as default value,
     pval_bigfloat::Bool = false,
     write_ivs::Union{Nothing, AbstractString} = nothing,
-    write_filtered_exposure::Union{AbstractString, Nothing} = nothing
+    write_filtered_exposure::Union{AbstractString, Nothing} = nothing,
+    min_maf::Real = 0
     )::Union{Dataset, GroupBy}
 
     # input validity verification
@@ -379,7 +382,8 @@ function mrStudyCis(exposure::QTLStudy,
                                  trsf_pval_out = trsf_pval_out,
                                  pval_bigfloat = pval_bigfloat,
                                  write_filtered_exposure = write_filtered_exposure,
-                                 write_ivs = write_ivs)
+                                 write_ivs = write_ivs,
+                                 min_maf = min_maf)
     end 
     #load and filter qtl data (filter for significan snps to exposure and within specified window)
     verify_columns(exposure)
@@ -439,7 +443,10 @@ function mrStudyCis(exposure::QTLStudy,
 
     #### for d in eachgroup(joined_d) -> Plink + MR (implemented in NaiveCis)
     if approach == "naive" || approach == "strict"
-        return NaiveCis(joined_d, GenotypesArr, r2_tresh = r2_tresh, one_file_per_chr_plink = one_file_per_chr_plink, mr_methods = mr_methods, α = α, write_ivs = write_ivs)
+        return NaiveCis(joined_d, GenotypesArr, r2_tresh = r2_tresh, 
+                        one_file_per_chr_plink = one_file_per_chr_plink, 
+                        mr_methods = mr_methods, α = α, 
+                        write_ivs = write_ivs, min_maf = min_maf)
     else
         return joined_d
     end
@@ -486,7 +493,8 @@ function mrStudyTransNFolds(exposure::QTLStudy,
                            pval_bigfloat::Bool = false,
                            write_ivs::Union{AbstractString, Nothing} = nothing,
                            write_filtered_exposure::Union{AbstractString, Nothing} = nothing,
-                           filter_beta_ratio::Real = 0
+                           filter_beta_ratio::Real = 0,
+                           min_maf::Real = 0
                           )::Union{Dataset, GroupBy}
     if approach != "naive" throw(ArgumentError("aproach should not be strict with mrStudyCisNFolds.")) end
 
@@ -506,7 +514,8 @@ function mrStudyTransNFolds(exposure::QTLStudy,
                                 pval_bigfloat = pval_bigfloat,
                                 write_ivs = write_ivs,
                                 write_filtered_exposure = write_filtered_exposure,
-                                filter_beta_ratio = filter_beta_ratio))
+                                filter_beta_ratio = filter_beta_ratio,
+                                min_maf = min_maf))
     end
 
     return Folds.reduce(vcat, arr_d, init = Dataset())
@@ -564,7 +573,8 @@ function mrStudyTrans(exposure::QTLStudy,
     pval_bigfloat::Bool = false,
     write_ivs::Union{AbstractString, Nothing} = nothing,
     write_filtered_exposure::Union{AbstractString, Nothing} = nothing,
-    filter_beta_ratio::Real = 0
+    filter_beta_ratio::Real = 0,
+    min_maf::Real = 0
     )::Union{Dataset, GroupBy}
 
     # input validity verification
@@ -590,7 +600,8 @@ function mrStudyTrans(exposure::QTLStudy,
                                  pval_bigfloat = pval_bigfloat,
                                  filter_beta_ratio = filter_beta_ratio,
                                  write_filtered_exposure = write_filtered_exposure,
-                                 write_ivs = write_ivs)
+                                 write_ivs = write_ivs,
+                                 min_maf = min_maf)
     end 
     #load and filter qtl data (filter for significan snps to exposure and within specified window)
     verify_columns(exposure)
@@ -655,7 +666,13 @@ function mrStudyTrans(exposure::QTLStudy,
 
     #### for d in eachgroup(joined_d) -> Plink + MR (implemented in NaiveCis)
     if approach == "naive" || approach == "strict"
-        return NaiveTrans(joined_d, GenotypesArr, r2_tresh = r2_tresh, one_file_per_chr_plink = one_file_per_chr_plink, mr_methods = mr_methods, α = α, write_ivs = write_ivs)
+        return NaiveTrans(joined_d, GenotypesArr, 
+                          r2_tresh = r2_tresh, 
+                          one_file_per_chr_plink = one_file_per_chr_plink, 
+                          mr_methods = mr_methods, 
+                          α = α, 
+                          write_ivs = write_ivs,
+                          min_maf = min_maf)
     else
         return joined_d
     end
@@ -677,7 +694,8 @@ function mrStudyTrans(exposure::GWAS,
                       pval_bigfloat::Bool = false,
                       write_ivs::Union{AbstractString, Nothing} = nothing,
                       write_filtered_exposure::Union{AbstractString, Nothing} = nothing,
-                      filter_beta_ratio::Real = 0
+                      filter_beta_ratio::Real = 0,
+                      min_maf::Real = 0
                       )::Union{Dataset, GroupBy}
 
 exposure_name = (exposure.trait_name === nothing) ? "exposure" : exposure.trait_name
@@ -697,6 +715,7 @@ return mrStudyTrans(qtl_exposure, outcome, bedbimfam_dirnames;
                     pval_bigfloat = pval_bigfloat,
                     write_ivs = write_ivs,
                     write_filtered_exposure = write_filtered_exposure,
-                    filter_beta_raio = filter_beta_ratio)
+                    filter_beta_raio = filter_beta_ratio,
+                    min_maf = min_maf)
 
 end
