@@ -331,7 +331,8 @@ Perform a Cis-Mendelian Randomization study with exposure QTL and outcome GWAS
 `low_ram::Bool` : If true, if the exposure files each contain only one exposure trait, [`mrStudyCisNFolds`](@ref) with `n_folds` of 10 will be used.\\
 `write_ivs::AbstractString` : write selected Instrumental variables to specified directory\\
 `write_filtered_exposure::AbstractString` : write a filtered version of exposure files to specified file name.
-    This file will be tab separated and will only contain columns necessary for further MR Studies.
+    This file will be tab separated and will only contain columns necessary for further MR Studies.\\
+`pval_bigfloat::Bool` : use `true` if pvalues can be under `5e-324`. (default is `false`)
 
 ## Examples
 
@@ -550,6 +551,7 @@ Perform a Trans-Mendelian Randomization study with exposure QTL and outcome GWAS
 `write_ivs::AbstractString` : write selected Instrumental variables to specified directory\\
 `write_filtered_exposure::AbstractString` : write a filtered version of exposure files to specified file name.
     This file will be tab separated and will only contain columns necessary for further MR Studies.\\
+`pval_bigfloat::Bool` : use `true` if pvalues can be under `5e-324`. (default is `false`)\\
 `filter_beta_raio::Real` : Filter IVs for which the exposure effect is `filter_beta_raio` times outcome effect or greater. default is 0.
 
 ## Examples

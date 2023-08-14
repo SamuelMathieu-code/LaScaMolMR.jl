@@ -63,11 +63,11 @@ gwas = GWAS("path/to/file",
             ',')
 ```
 """
-mutable struct GWAS{T <: Integer, S <: AbstractString}
-    path::S
-    columns::Union{Dict{T, GenVarInfo}}
+mutable struct GWAS
+    path::AbstractString
+    columns::Union{Dict{<:Integer, GenVarInfo}}
     separator::Union{Char, Vector{Char}}
-    trait_name::Union{Nothing, S} 
+    trait_name::Union{Nothing, AbstractString} 
 end
 
 GWAS(path,
@@ -274,6 +274,10 @@ function QTLStudy_from_pattern(folder::AbstractString,
         traits_for_each_file = trait_v[trait_index_files[indexes_keep_file]]   #vectors of traits corresponding to kept files
     else
         traits_for_each_file = repeat([nothing], length(files)) # treat case when files are not trait_specific
+    end
+
+    if length(files) < 1
+        throw(ArgumentError("No file corresponds to specified folder, pattern and `only_corresp_chr` = $(only_corresp_chr)."))
     end
 
     return QTLStudy(files, traits_for_each_file, trait_v, chr_v, tss_v, columns, separator)
