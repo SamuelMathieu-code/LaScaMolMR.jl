@@ -94,7 +94,7 @@ separator               # column separator
 """
 mutable struct QTLStudy
     path_v::Vector{S1} where S1 <: Union{Missing, AbstractString}
-    traits_for_each_path::Vector{SN} where SN <: Union{String, Missing, Nothing}
+    traits_for_each_path::Vector{SN} where SN <: Union{AbstractString, Missing, Nothing}
     trait_v::Vector{S2} where S2 <: Union{Missing, AbstractString}
     chr_v::Union{Vector{I1}, Nothing} where I1 <: Union{Missing, Integer}
     tss_v::Union{Vector{I2}, Nothing} where I2 <: Union{Missing, Integer}
@@ -189,18 +189,18 @@ function QTLStudy_from_pattern(folder::AbstractString,
         throw(ArgumentError("chr_v, tss_v, trait_v must be same length"))
     end
 
-    if path_pattern[1] isa String && startswith(path_pattern[1], Base.Filesystem.path_separator)
+    if path_pattern[1] isa AbstractString && startswith(path_pattern[1], Base.Filesystem.path_separator)
         @warn "The first element of path_pattern starts with the path separator. Paths separators are not necessary in this place. It will be removed"
         path_pattern_=[path_pattern[1][length(Base.Filesystem.path_separator)+1:end]; path_pattern[2:end]]
     else
         path_pattern_ = path_pattern
     end
 
-    if only_corresp_chr == true && !(TRAIT_NAME in path_pattern_)
+    if only_corresp_chr == true && (!(TRAIT_NAME in path_pattern_) || chr_v === nothing || tss_v === nothing)
         only_corresp_chr = false
     end
 
-    new_arr::Vector{String} = map(x -> (x isa String) ? x : "*", path_pattern_)
+    new_arr::Vector{String} = map(x -> (x isa AbstractString) ? x : "*", path_pattern_)
     
     pattern_str = accumulate(*, new_arr)[end]
     patt = Glob.GlobMatch(pattern_str)
@@ -209,7 +209,7 @@ function QTLStudy_from_pattern(folder::AbstractString,
     trait_index = findfirst(x->x==TRAIT_NAME, path_pattern_)
     chr_index = findfirst(x -> x==CHR, path_pattern_)
 
-    #regex version of pattern
+    # regex version of pattern
     pattern_v = map(x -> (x isa String) ? raw""*x : r"(.*?)", path_pattern_)
     if endswith(folder, Base.Filesystem.path_separator)
         pattern = folder * accumulate(*, pattern_v)[end]
