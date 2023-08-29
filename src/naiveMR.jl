@@ -27,6 +27,7 @@ Implmentation of naive approach for transcriptome wide MR
     Returns a Dataset of results for each exposure (rows).
 
 **arguments :** 
+
 `data` : grouped dataset (exposure trait) with specific column names : 
     `:trait`, `:chr`, `:pos`, `:β_exp`, `β_out`, `:se_exp`, `:se_out` among others. \\
 `GenotypesArr::AbstractVector{SnpData}` : Reference genotypes. (see [`SnpArrays`](https://github.com/OpenMendel/SnpArrays.jl))
@@ -164,6 +165,7 @@ Implmentation of naive approach for Trans Omic-wide MR
     Returns a Dataset of results for each exposure (rows).
 
 **arguments :** 
+
 `data` : grouped dataset (exposure trait) with specific column names : 
     `:trait`, `:chr`, `:pos`, `:β_exp`, `β_out`, `:se_exp`, `:se_out` among others. \\
 `GenotypesArr::AbstractVector{SnpData}` : Reference genotypes. (see [`SnpArrays`](https://github.com/OpenMendel/SnpArrays.jl)) formated with [`formatSnpData!`](@ref).

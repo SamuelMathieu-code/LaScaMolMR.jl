@@ -47,7 +47,13 @@ setprecision(BigFloat, 4)
 
 # make a vector of header symbol for QTLStudy/GWAS and a dictionary of types to pass to DLMReader
 function make_types_and_headers(file::Union{QTLStudy, GWAS};
-                                pval_bigfloat::Bool = false)::Tuple{Dict{Int, DataType}, Vector{Symbol}}
+                                pval_bigfloat::Bool = false,
+                                reverse::Bool = false)::Tuple{Dict{Int, DataType}, Vector{Symbol}}
+    if reverse
+        outcome_b = file isa QTLStudy
+    else
+        outcome_b = file isa GWAS
+    end
     types::Dict{Int, DataType} = Dict()
     n_cols_file::Int = 0
     GenVarInfo_Types_copy = copy(GenVarInfo_Types)
@@ -66,7 +72,7 @@ function make_types_and_headers(file::Union{QTLStudy, GWAS};
     for i in 1:n_cols_file
         if haskey(file.columns, i)
             types[i] = GenVarInfo_Types_copy[file.columns[i]]
-            header[i] = (file isa GWAS) ? GenVarInfo_Symbols_out[file.columns[i]] : GenVarInfo_Symbols_exp[file.columns[i]]
+            header[i] = (outcome_b) ? GenVarInfo_Symbols_out[file.columns[i]] : GenVarInfo_Symbols_exp[file.columns[i]]
         else
             types[i] = String
         end
@@ -149,8 +155,19 @@ function read_filter_file(file::GWAS,
                           trsf_log_pval::Union{Function, Nothing}, 
                           in_window::Function, 
                           header::Vector{Symbol}, 
-                          types::Dict{Int, DataType})::Dataset
+                          types::Dict{Int, DataType};
+                          reverse::Bool = false)::Dataset
     
+    if reverse
+        a_effect = :a_effect_out
+        a_other = :a_other_out
+        pval = :pval_out
+    else
+        a_effect = :a_effect_exp
+        a_other = :a_other_exp
+        pval = :pval_exp
+    end
+
     d = filereader(file.path, delimiter = file.separator, 
                     header = header, types = types, skipto=2, 
                     makeunique=true, eolwarn=false, threads = threads)[:,collect(keys(file.columns))]
@@ -159,18 +176,18 @@ function read_filter_file(file::GWAS,
         d.trait = repeat([file.trait_name], nrow(d))
     end
 
-    modify!(d, :trait => PooledArray, [:a_effect_exp, :a_other_exp] .=> (PooledArray ∘ (x -> lowercase.(x))))
+    modify!(d, :trait => PooledArray, [a_effect, a_other] .=> (PooledArray ∘ (x -> lowercase.(x))))
     
     if trsf_log_pval !== nothing
-        modify!(d, :pval_exp => trsf_log_pval, threads = threads)
+        modify!(d, pval => trsf_log_pval, threads = threads)
     end
 
     if !filtered
         d = @chain d begin 
-            filter([:chr, :pos, :trait, :pval_exp], 
+            filter([:chr, :pos, :trait, pval], 
                 type = in_window, threads = threads, missings = false) # dataset filtered for window and significance
-            filter(:a_effect_exp, type = x -> length(x) == 1, threads = threads, missings = false) # remove indels
-            filter(:a_other_exp, type = x -> length(x) == 1, threads = threads, missings = false)  # remove indels
+            filter(a_effect, type = x -> length(x) == 1, threads = threads, missings = false) # remove indels
+            filter(a_other, type = x -> length(x) == 1, threads = threads, missings = false)  # remove indels
         end
     end
     
@@ -193,6 +210,7 @@ function read_qtl_files_cis(exposure::QTLStudy,
     # boolan tells if the variant is significant causal on exposure and if in window arround good tss
     # equivalent to : good chr && in 500kb window && pval lower than threshold
     in_window(s::SubArray) = (
+                              haskey(ref_dict, s[3]) &&
                               s[1] == ref_dict[s[3]][1] && # good chr
                               abs(s[2]-ref_dict[s[3]][2])≤window && # in window
                               s[4]<p_tresh # p_thresh significant
@@ -201,10 +219,16 @@ function read_qtl_files_cis(exposure::QTLStudy,
     data_vect = Vector{Dataset}(undef, length(exposure))
 
     add_trait_name_b = !(TRAIT_NAME in values(exposure.columns))
-
-    for i in 1:lastindex(data_vect)
-        file = exposure[i]
-        data_vect[i] = read_filter_file(file, add_trait_name_b, true, filtered, trsf_log_pval, in_window, header, types)
+    if length(exposure) > 2*nthreads()
+        @threads for i in 1:lastindex(data_vect)
+            file = exposure[i]
+            data_vect[i] = read_filter_file(file, add_trait_name_b, false, filtered, trsf_log_pval, in_window, header, types)
+        end
+    else
+        for i in 1:lastindex(data_vect)
+            file = exposure[i]
+            data_vect[i] = read_filter_file(file, add_trait_name_b, true, filtered, trsf_log_pval, in_window, header, types)
+        end
     end
 
     data_filtered = Folds.reduce(vcat, data_vect, init = Dataset())
@@ -217,7 +241,8 @@ function read_qtl_files_trans(exposure::QTLStudy,
                               header::Vector{Symbol},
                               p_tresh::Float64,
                               filtered::Bool = false,
-                              trsf_log_pval::Union{Function, Nothing} = nothing)::Dataset
+                              trsf_log_pval::Union{Function, Nothing} = nothing;
+                              reverse::Bool = false)::Dataset
 
     data_vect = Vector{Dataset}(undef, length(exposure))
 
@@ -227,7 +252,7 @@ function read_qtl_files_trans(exposure::QTLStudy,
 
     for i in 1:lastindex(data_vect)
         file = exposure[i]
-        data_vect[i] = read_filter_file(file, add_trait_name_b, true, filtered, trsf_log_pval, filter_fun, header, types)
+        data_vect[i] = read_filter_file(file, add_trait_name_b, true, filtered, trsf_log_pval, filter_fun, header, types, reverse = reverse)
     end
 
     data_filtered = Folds.reduce(vcat, data_vect, init = Dataset())
@@ -275,7 +300,8 @@ function mrStudyCisNFolds(exposure::QTLStudy,
                            pval_bigfloat::Bool = false,
                            write_ivs::Union{AbstractString, Nothing} = nothing,
                            write_filtered_exposure::Union{AbstractString, Nothing} = nothing,
-                           min_maf::Real = 0
+                           min_maf::Real = 0,
+                           infos::Bool = true
                           )::Union{Dataset, GroupBy}
     if approach != "naive" throw(ArgumentError("aproach should not be strict with mrStudyCisNFolds.")) end
 
@@ -296,7 +322,8 @@ function mrStudyCisNFolds(exposure::QTLStudy,
                                 pval_bigfloat = pval_bigfloat,
                                 write_ivs = write_ivs,
                                 write_filtered_exposure = write_filtered_exposure,
-                                min_maf = min_maf))
+                                min_maf = min_maf,
+                                infos = infos))
     end
 
     return Folds.reduce(vcat, arr_d, init = Dataset())
@@ -332,7 +359,9 @@ Perform a Cis-Mendelian Randomization study with exposure QTL and outcome GWAS
 `write_ivs::AbstractString` : write selected Instrumental variables to specified directory\\
 `write_filtered_exposure::AbstractString` : write a filtered version of exposure files to specified file name.
     This file will be tab separated and will only contain columns necessary for further MR Studies.\\
-`pval_bigfloat::Bool` : use `true` if pvalues can be under `5e-324`. (default is `false`)
+`pval_bigfloat::Bool` : use `true` if pvalues can be under `5e-324`. (default is `false`)\\
+`min_maf::Real` : minimal variant maf to be kept as a potential IV. (default is 0)\\
+`infos::Bool` : If true, infos about advancement compute are printed to terminal (default is `true`)
 
 ## Examples
 
@@ -356,7 +385,8 @@ function mrStudyCis(exposure::QTLStudy,
     pval_bigfloat::Bool = false,
     write_ivs::Union{Nothing, AbstractString} = nothing,
     write_filtered_exposure::Union{AbstractString, Nothing} = nothing,
-    min_maf::Real = 0
+    min_maf::Real = 0,
+    infos::Bool = true
     )::Union{Dataset, GroupBy}
 
     # input validity verification
@@ -384,9 +414,14 @@ function mrStudyCis(exposure::QTLStudy,
                                  pval_bigfloat = pval_bigfloat,
                                  write_filtered_exposure = write_filtered_exposure,
                                  write_ivs = write_ivs,
-                                 min_maf = min_maf)
+                                 min_maf = min_maf,
+                                 infos = infos)
     end 
     #load and filter qtl data (filter for significan snps to exposure and within specified window)
+    if infos
+        @info "reading and filtering exposure files..."
+    end
+
     verify_columns(exposure)
     types, header = make_types_and_headers(exposure; pval_bigfloat = pval_bigfloat)
     qtl_d = read_qtl_files_cis(exposure, types, header, window, p_tresh, exposure_filtered, trsf_pval_exp)
@@ -394,7 +429,9 @@ function mrStudyCis(exposure::QTLStudy,
     if write_filtered_exposure !== nothing
         filewriter(write_filtered_exposure, qtl_d, delimiter = '\t')
     end
-    
+    if infos
+        @info "reading outcome file..."
+    end
     # load gwas data
     verify_columns(outcome)
     types, header = make_types_and_headers(outcome)
@@ -415,10 +452,13 @@ function mrStudyCis(exposure::QTLStudy,
         return Dataset()
     end
 
+    if infos
+        @info "finding potential IVs..."
+    end
     # keep only biallelic snps
     biallelic(s::SubArray) = (s[1]==s[2] && s[3] == s[4]) || (s[1] == s[4] && s[2] == s[3])
     joined_d = @chain qtl_d begin
-        innerjoin(gwas_d, on = [:chr, :pos], makeunique = false)
+        innerjoin(gwas_d, on = [:chr, :pos], makeunique = false, check = false)
         filter([:a_effect_exp, :a_effect_out, :a_other_exp, :a_other_out], type = biallelic, missings = false) # filter for "obvious" non biallelic variants
         filter(:, by = !ismissing)
     end
@@ -430,7 +470,9 @@ function mrStudyCis(exposure::QTLStudy,
         is_unique_iv(s) = counts[s] == 1
         filter!(joined_d, :chr_pos, by = is_unique_iv)
     end
-
+    if infos
+        @info "loading genotypes..."
+    end
     # load and format reference snp data
     GenotypesArr = Vector{SnpData}(undef, length(bedbimfam_dirnames))
     @threads for i in 1:lastindex(bedbimfam_dirnames)
@@ -440,8 +482,15 @@ function mrStudyCis(exposure::QTLStudy,
 
     one_file_per_chr_plink = length(bedbimfam_dirnames) > 1
 
+    if infos
+        @info "grouping traits..."
+    end
+
     groupby!(joined_d, :trait, stable = false)
 
+    if infos
+        @info "Performing clumping and MR..."
+    end
     #### for d in eachgroup(joined_d) -> Plink + MR (implemented in NaiveCis)
     if approach == "naive" || approach == "strict"
         return NaiveCis(joined_d, GenotypesArr, r2_tresh = r2_tresh, 
@@ -495,7 +544,8 @@ function mrStudyTransNFolds(exposure::QTLStudy,
                            write_ivs::Union{AbstractString, Nothing} = nothing,
                            write_filtered_exposure::Union{AbstractString, Nothing} = nothing,
                            filter_beta_ratio::Real = 0,
-                           min_maf::Real = 0
+                           min_maf::Real = 0,
+                           infos::Bool = true
                           )::Union{Dataset, GroupBy}
     if approach != "naive" throw(ArgumentError("aproach should not be strict with mrStudyCisNFolds.")) end
 
@@ -516,7 +566,51 @@ function mrStudyTransNFolds(exposure::QTLStudy,
                                 write_ivs = write_ivs,
                                 write_filtered_exposure = write_filtered_exposure,
                                 filter_beta_ratio = filter_beta_ratio,
-                                min_maf = min_maf))
+                                min_maf = min_maf,
+                                infos = infos))
+    end
+
+    return Folds.reduce(vcat, arr_d, init = Dataset())
+end
+
+
+function mrStudyTransNFolds(exposure::GWAS, 
+                            outcome::QTLStudy, 
+                            bedbimfam_dirnames::AbstractArray{<:AbstractString};
+                            n_folds = 10,
+                            approach::String="naive", 
+                            p_tresh::Float64 = 1e-3, 
+                            r2_tresh::Float64 = 0.1,
+                            mr_methods::AbstractVector{Function} = [mr_egger, mr_ivw],
+                            α::Float64 = 0.05,
+                            trsf_pval_exp::Union{Function, Nothing} = nothing,
+                            trsf_pval_out::Union{Function, Nothing} = nothing,
+                            pval_bigfloat::Bool = false,
+                            write_ivs::Union{AbstractString, Nothing} = nothing,
+                            filter_beta_ratio::Real = 0,
+                            min_maf::Real = 0,
+                            infos::Bool = true
+                        )::Union{Dataset, GroupBy}
+    
+    if approach != "naive" throw(ArgumentError("aproach should not be strict with mrStudyCisNFolds.")) end
+
+    arr_d = Vector{Dataset}([])
+    for qtl in nfolds(outcome, n_folds)
+    push!(arr_d, mrStudyTrans(exposure, 
+                            qtl,
+                            bedbimfam_dirnames,
+                            approach = approach, 
+                            p_tresh = p_tresh,  
+                            r2_tresh = r2_tresh,
+                            mr_methods = mr_methods,
+                            α = α,
+                            trsf_pval_exp = trsf_pval_exp,
+                            trsf_pval_out = trsf_pval_out,
+                            pval_bigfloat = pval_bigfloat,
+                            write_ivs = write_ivs,
+                            filter_beta_ratio = filter_beta_ratio,
+                            min_maf = min_maf,
+                            infos = infos))
     end
 
     return Folds.reduce(vcat, arr_d, init = Dataset())
@@ -529,7 +623,7 @@ Perform a Trans-Mendelian Randomization study with exposure QTL and outcome GWAS
 **arguments :**
 
 `exposure::QTLStudy` : exposure QTL data \\
-`outcome::GWAS` : outcome gas data \\
+`outcome::GWAS` : outcome GWAS data \\
 `bedbimfam_dirnames::AbstractArray{<:AbstractString}` : base names of Plink bedbimfam files for reference genotypes 
     (see [SnpArrays documentation](https://openmendel.github.io/SnpArrays.jl/latest/))\\
 
@@ -552,7 +646,8 @@ Perform a Trans-Mendelian Randomization study with exposure QTL and outcome GWAS
 `write_filtered_exposure::AbstractString` : write a filtered version of exposure files to specified file name.
     This file will be tab separated and will only contain columns necessary for further MR Studies.\\
 `pval_bigfloat::Bool` : use `true` if pvalues can be under `5e-324`. (default is `false`)\\
-`filter_beta_raio::Real` : Filter IVs for which the exposure effect is `filter_beta_raio` times outcome effect or greater. default is 0.
+`filter_beta_raio::Real` : Filter IVs for which the exposure effect is `filter_beta_raio` times outcome effect or greater. default is 0.\\
+`infos::Bool` : If true, infos about advancement compute are printed to terminal (default is `true`)
 
 ## Examples
 
@@ -576,7 +671,8 @@ function mrStudyTrans(exposure::QTLStudy,
     write_ivs::Union{AbstractString, Nothing} = nothing,
     write_filtered_exposure::Union{AbstractString, Nothing} = nothing,
     filter_beta_ratio::Real = 0,
-    min_maf::Real = 0
+    min_maf::Real = 0,
+    infos::Bool = true
     )::Union{Dataset, GroupBy}
 
     # input validity verification
@@ -603,9 +699,14 @@ function mrStudyTrans(exposure::QTLStudy,
                                  filter_beta_ratio = filter_beta_ratio,
                                  write_filtered_exposure = write_filtered_exposure,
                                  write_ivs = write_ivs,
-                                 min_maf = min_maf)
+                                 min_maf = min_maf,
+                                 infos = infos)
     end 
     #load and filter qtl data (filter for significan snps to exposure and within specified window)
+    if infos
+        @info "reading and filtering exposure..."
+    end
+
     verify_columns(exposure)
     types, header = make_types_and_headers(exposure; pval_bigfloat = pval_bigfloat)
     qtl_d = read_qtl_files_trans(exposure, types, header, p_tresh, exposure_filtered, trsf_pval_exp)
@@ -615,6 +716,10 @@ function mrStudyTrans(exposure::QTLStudy,
     end
     
     # load gwas data
+    if infos
+        @info "reading outcome..."
+    end
+
     verify_columns(outcome)
     types, header = make_types_and_headers(outcome)
     gwas_d = filereader(outcome.path, 
@@ -623,8 +728,8 @@ function mrStudyTrans(exposure::QTLStudy,
                         makeunique=true, eolwarn=false)[:,collect(keys(outcome.columns))]
 
     # Transform pval if trsf pval is not nothing
-    if trsf_pval_out !== nothing
-        modify!(gwas_d, :pval => trsf_pval_out)
+    if trsf_pval_exp !== nothing
+        modify!(gwas_d, :pval_exp => trsf_pval_out)
     end
     # change gwas a_effect_out a_other_out to a Pooled array to save memory
     modify!(gwas_d, [:a_effect_out, :a_other_out] => (PooledArray ∘ x -> lowercase.(x)))
@@ -634,10 +739,14 @@ function mrStudyTrans(exposure::QTLStudy,
         return Dataset()
     end
 
+    if infos
+        @info "finding potential IVs..."
+    end
+
     # keep only biallelic snps
     biallelic(s::SubArray) = (s[1] == s[2] && s[3] == s[4]) || (s[1] == s[4] && s[2] == s[3])
     joined_d = @chain qtl_d begin
-        innerjoin(gwas_d, on = [:chr, :pos], makeunique = false)
+        innerjoin(gwas_d, on = [:chr, :pos], makeunique = false, check = false)
         filter([:a_effect_exp, :a_effect_out, :a_other_exp, :a_other_out], type = biallelic, missings = false) # filter for "obvious" non biallelic variants
         filter(:, by = !ismissing)
     end
@@ -655,6 +764,10 @@ function mrStudyTrans(exposure::QTLStudy,
         filter!(joined_d, [:β_exp, :β_out], type = beta_compare_b, missings = false)
     end
 
+    if infos
+        @info "loading genotypes..."
+    end
+
     # load and format reference snp data
     GenotypesArr = Vector{SnpData}(undef, length(bedbimfam_dirnames))
     @threads for i in 1:lastindex(bedbimfam_dirnames)
@@ -664,7 +777,15 @@ function mrStudyTrans(exposure::QTLStudy,
 
     one_file_per_chr_plink = length(bedbimfam_dirnames) > 1
 
+    if infos
+        @info "grouping by trait..."
+    end
+
     groupby!(joined_d, :trait, stable = false)
+
+    if infos
+        @info "performing clumping and MR..."
+    end
 
     #### for d in eachgroup(joined_d) -> Plink + MR (implemented in NaiveCis)
     if approach == "naive" || approach == "strict"
@@ -681,6 +802,44 @@ function mrStudyTrans(exposure::QTLStudy,
 end
 
 
+"""
+Perform a Trans-Mendelian Randomization study with exposure GWAS and outcome GWAS
+
+**arguments :**
+
+`exposure::GWAS` : exposure QTL data \\
+`outcome::GWAS` : outcome GWAS data \\
+`bedbimfam_dirnames::AbstractArray{<:AbstractString}` : base names of Plink bedbimfam files for reference genotypes 
+    (see [SnpArrays documentation](https://openmendel.github.io/SnpArrays.jl/latest/))\\
+
+**options :** \\
+
+`approach::String`: name of MR study aproach chosen (either naive, test or strict) (default is "naive")\\
+`p_tresh::Float64`: pvalue threshold for a SNP to be considered associated to an exposure (default is 1e-3)\\
+`r2_tresh::Float64`: maximial corrlation between to SNPs (default is 0.1)\\
+`exposure_filtered::Bool` : If true, the exposure files are considered already filtered will not filtered 
+    on distance to tss and level of significance (default is false)\\
+`mr_methods::AbstractVector{Function}` : Functions to use to estimate effect of exposure on outcome.
+    Any Function taking four vectors of same length (βoutcome, se_outcome, βexposure, se_exposure) and a Float (α) 
+    and returns a value of type [`mr_output`](@ref) can be used, that includes user defined functions. 
+    Functions already implemented in this module include [`mr_ivw`](@ref), [`mr_egger`](@ref), [`mr_wm`](@ref) and [`mr_wald`](@ref). default value is `[mr_ivw, mr_egger]` \\
+`α::Float64` : α value for confidance intervals of parameter estimations in MR (e.g. 95% CI is α = 0.05, which is the default value)\\
+`trsf_pval_exp::Union{Function, Nothing}` : Transformation to apply to pvalues in exposure dataset\\
+`trsf_pval_out::Union{Function, Nothing}` : t = Transormation to apply on pvalues in outcome dataset\\
+`low_ram::Bool` : If true, if the exposure files each contain only one exposure trait, [`mrStudyCisNFolds`](@ref) with `n_folds` of 10 will be used.
+`write_ivs::AbstractString` : write selected Instrumental variables to specified directory\\
+`write_filtered_exposure::AbstractString` : write a filtered version of exposure files to specified file name.
+    This file will be tab separated and will only contain columns necessary for further MR Studies.\\
+`pval_bigfloat::Bool` : use `true` if pvalues can be under `5e-324`. (default is `false`)\\
+`filter_beta_raio::Real` : Filter IVs for which the exposure effect is `filter_beta_raio` times outcome effect or greater. default is 0.\\
+`infos::Bool` : If true, infos about advancement compute are printed to terminal (default is `true`)
+
+## Examples
+
+```julia
+results = mrStudyTrans(mqtl, gwas, genotypes, 10, approach = "naive", trsf_pval_exp = x -> exp10.(x))
+```
+"""
 function mrStudyTrans(exposure::GWAS, 
                       outcome::GWAS, 
                       bedbimfam_dirnames::AbstractArray{<:AbstractString};
@@ -697,7 +856,8 @@ function mrStudyTrans(exposure::GWAS,
                       write_ivs::Union{AbstractString, Nothing} = nothing,
                       write_filtered_exposure::Union{AbstractString, Nothing} = nothing,
                       filter_beta_ratio::Real = 0,
-                      min_maf::Real = 0
+                      min_maf::Real = 0,
+                      infos::Bool = true
                       )::Union{Dataset, GroupBy}
 
 exposure_name = (exposure.trait_name === nothing) ? "exposure" : exposure.trait_name
@@ -718,6 +878,174 @@ return mrStudyTrans(qtl_exposure, outcome, bedbimfam_dirnames;
                     write_ivs = write_ivs,
                     write_filtered_exposure = write_filtered_exposure,
                     filter_beta_raio = filter_beta_ratio,
-                    min_maf = min_maf)
+                    min_maf = min_maf,
+                    infos = infos)
+
+end
+
+
+"""
+Perform a Trans-Mendelian Randomization study with exposure GWAS and outcome QTL (Reverse MR)
+
+**arguments :**
+
+`exposure::GWAS` : exposure GWAS data \\
+`outcome::QTLStudy` : outcome QTL data \\
+`bedbimfam_dirnames::AbstractArray{<:AbstractString}` : base names of Plink bedbimfam files for reference genotypes 
+    (see [SnpArrays documentation](https://openmendel.github.io/SnpArrays.jl/latest/))\\
+
+**options :** 
+
+`approach::String`: name of MR study aproach chosen (either naive, test or strict) (default is "naive")\\
+`p_tresh::Float64`: pvalue threshold for a SNP to be considered associated to an exposure (default is 1e-3)\\
+`r2_tresh::Float64`: maximial corrlation between to SNPs (default is 0.1)\\
+`mr_methods::AbstractVector{Function}` : Functions to use to estimate effect of exposure on outcome.
+    Any Function taking four vectors of same length (βoutcome, se_outcome, βexposure, se_exposure) and a Float (α) 
+    and returns a value of type [`mr_output`](@ref) can be used, that includes user defined functions. 
+    Functions already implemented in this module include [`mr_ivw`](@ref), [`mr_egger`](@ref), [`mr_wm`](@ref) and [`mr_wald`](@ref). default value is `[mr_ivw, mr_egger]` \\
+`α::Float64` : α value for confidance intervals of parameter estimations in MR (e.g. 95% CI is α = 0.05, which is the default value)\\
+`trsf_pval_exp::Union{Function, Nothing}` : Transformation to apply to pvalues in exposure dataset\\
+`trsf_pval_out::Union{Function, Nothing}` : t = Transormation to apply on pvalues in outcome dataset\\
+`low_ram::Bool` : If true, if the exposure files each contain only one exposure trait, [`mrStudyCisNFolds`](@ref) with `n_folds` of 10 will be used.
+`write_ivs::AbstractString` : write selected Instrumental variables to specified directory\\
+`pval_bigfloat::Bool` : use `true` if pvalues can be under `5e-324`. (default is `false`)\\
+`filter_beta_raio::Real` : Filter IVs for which the exposure effect is `filter_beta_raio` times outcome effect or greater. default is 0.\\
+`infos::Bool` : If true, infos about advancement compute are printed to terminal (default is `true`)
+
+"""
+function mrStudyTrans(exposure::GWAS,
+                      outcome::QTLStudy,
+                      bedbimfam_dirnames::AbstractArray{<:AbstractString};
+                      approach::String="naive", 
+                      p_tresh::Float64 = 1e-3, 
+                      r2_tresh::Float64 = 0.1,
+                      mr_methods::AbstractVector{Function} = [mr_egger, mr_ivw],
+                      α::Float64 = 0.05,
+                      trsf_pval_exp::Union{Function, Nothing} = nothing,
+                      trsf_pval_out::Union{Function, Nothing} = nothing,
+                      low_ram::Bool = false, # temporary? if as performant --> set true as default value
+                      pval_bigfloat::Bool = false,
+                      write_ivs::Union{AbstractString, Nothing} = nothing,
+                      filter_beta_ratio::Real = 0,
+                      min_maf::Real = 0,
+                      infos::Bool = true
+                    )
+    
+    # input validity verification
+    l_unique_traits = length(unique(outcome.traits_for_each_path))
+    if approach ∉ ["naive", "test"] throw(ArgumentError("approach must be either : naive, test")) end
+    if (approach != "naive" || length(outcome.path_v) < 10) && low_ram 
+        @warn "low_ram option in mrStudy with approach different from \"naive\" or less than 10 files in QTLStudy will not be considered. Pay attention to Memory state." 
+    end
+
+    # verify if one qtl file per exposure and low_ram -> make folds to limit ram usage
+    if low_ram && l_unique_traits == length(exposure.path_v) && approach == "naive"
+        return mrStudyTransNFolds(exposure, 
+                                 outcome, 
+                                 bedbimfam_dirnames;
+                                 approach = approach, 
+                                 p_tresh = p_tresh, 
+                                 r2_tresh = r2_tresh,
+                                 mr_methods = mr_methods,
+                                 α = α,
+                                 trsf_pval_exp = trsf_pval_exp,
+                                 trsf_pval_out = trsf_pval_out,
+                                 pval_bigfloat = pval_bigfloat,
+                                 filter_beta_ratio = filter_beta_ratio,
+                                 write_ivs = write_ivs,
+                                 min_maf = min_maf,
+                                 infos = infos)
+    end 
+    #load and filter qtl data (filter for significan snps to exposure and within specified window)
+    if infos
+        @info "reading outcome..."
+    end
+    verify_columns(outcome, false)
+    types, header = make_types_and_headers(outcome; reverse = true)
+    qtl_d = read_qtl_files_trans(outcome, types, header, p_tresh, true, trsf_pval_out, reverse = true)
+    qtl_d = @chain qtl_d begin 
+        filter(:a_effect_out, type = x -> length(x) == 1, missings = false) # remove indels
+        filter(:a_other_out, type = x -> length(x) == 1, missings = false) # remove indels
+    end
+    # load gwas data
+    if infos
+        @info "reading and filtering exposure..."
+    end
+    verify_columns(exposure, true)
+    types, header = make_types_and_headers(exposure, pval_bigfloat = pval_bigfloat, reverse = true)
+    gwas_d = filereader(exposure.path, 
+                        delimiter = exposure.separator, 
+                        header = header, types = types, skipto=2, 
+                        makeunique=true, eolwarn=false)[:,collect(keys(exposure.columns))]
+    # Transform pval if trsf pval is not nothing
+    if trsf_pval_exp !== nothing
+        modify!(gwas_d, :pval_exp => trsf_pval_exp)
+    end
+    # change gwas a_effect_out a_other_out to a Pooled array to save memory
+    modify!(gwas_d, [:a_effect_exp, :a_other_exp] => (PooledArray ∘ x -> lowercase.(x)))
+
+    gwas_d = @chain gwas_d begin
+        filter(:pval_exp, type = x -> x .< p_tresh, missings = false)
+        filter(:a_effect_exp, type = x -> length(x) == 1, missings = false) # remove indels
+        filter(:a_other_exp, type = x -> length(x) == 1, missings = false)
+    end
+
+    ## Do not oin if one Dataset is empty
+    if size(gwas_d, 1) == 0 || size(qtl_d, 1) == 0
+        @warn "No IVS were found with given parameters."
+        return Dataset()
+    end
+
+    if infos
+        @info "finding potential IVs..."
+    end
+
+    # keep only biallelic snps
+    biallelic(s::SubArray) = (s[1] == s[2] && s[3] == s[4]) || (s[1] == s[4] && s[2] == s[3])
+    joined_d = @chain gwas_d begin
+        innerjoin(qtl_d, on = [:chr, :pos], makeunique = false, check = false)
+        filter([:a_effect_exp, :a_effect_out, :a_other_exp, :a_other_out], type = biallelic, missings = false) # filter for "obvious" non biallelic variants
+        filter(:, by = !ismissing)
+    end
+
+    if filter_beta_ratio > 0
+        beta_compare_b(s) = abs(s[2]) / abs(s[1]) ≤ filter_beta_ratio
+        filter!(joined_d, [:β_exp, :β_out], type = beta_compare_b, missings = false)
+    end
+
+    if infos
+        @info "loading genotypes..."
+    end
+
+    # load and format reference snp data
+    GenotypesArr = Vector{SnpData}(undef, length(bedbimfam_dirnames))
+    @threads for i in 1:lastindex(bedbimfam_dirnames)
+        GenotypesArr[i] = SnpData(SnpArrays.datadir(bedbimfam_dirnames[i]))
+        formatSnpData!(GenotypesArr[i])
+    end
+
+    one_file_per_chr_plink = length(bedbimfam_dirnames) > 1
+
+    if infos
+        @info "grouping by trait..."
+    end
+
+    groupby!(joined_d, :trait, stable = false)
+
+    if infos
+        @info "performing clumping and MR..."
+    end
+    #### for d in eachgroup(joined_d) -> Plink + MR (implemented in NaiveCis)
+    if approach == "naive"
+        return NaiveTrans(joined_d, GenotypesArr, 
+                          r2_tresh = r2_tresh, 
+                          one_file_per_chr_plink = one_file_per_chr_plink, 
+                          mr_methods = mr_methods, 
+                          α = α, 
+                          write_ivs = write_ivs,
+                          min_maf = min_maf)
+    else
+        return joined_d
+    end
 
 end

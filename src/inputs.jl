@@ -95,13 +95,13 @@ separator               # column separator
 mutable struct QTLStudy
     path_v::Vector{S1} where S1 <: Union{Missing, AbstractString}
     traits_for_each_path::Vector{SN} where SN <: Union{AbstractString, Missing, Nothing}
-    trait_v::Vector{S2} where S2 <: Union{Missing, AbstractString}
-    chr_v::Union{Vector{I1}, Nothing} where I1 <: Union{Missing, Integer}
-    tss_v::Union{Vector{I2}, Nothing} where I2 <: Union{Missing, Integer}
+    trait_v::AbstractVector{S2} where S2 <: Union{Missing, AbstractString}
+    chr_v::Union{AbstractVector{I1}, Nothing} where I1 <: Union{Missing, Integer}
+    tss_v::Union{AbstractVector{I2}, Nothing} where I2 <: Union{Missing, Integer}
     columns::Union{Dict{I3, GenVarInfo}} where I3 <: Integer
     separator::Union{Char, Vector{Char}}
 end
-
+ 
 QTLStudy(path_v::Vector,
     trait_v,
     chr_v,
@@ -176,12 +176,22 @@ qtl = QTLStudy_from_pattern("test/data", path_pattern, ttrait_v, chr_v, tss_v,
 """
 function QTLStudy_from_pattern(folder::AbstractString,
     path_pattern::AbstractVector, 
-    trait_v::Vector{S2} where S2 <: Union{Missing, AbstractString}, 
-    chr_v::Union{Vector{I2}, Nothing} where I2 <: Union{Missing, Integer}, 
-    tss_v::Union{Vector{I2}, Nothing} where I2 <: Union{Missing, Integer}, 
+    trait_v::Union{AbstractVector{S2}, DatasetColumn} where S2 <: Union{Missing, AbstractString}, 
+    chr_v::Union{AbstractVector{I2}, Nothing, DatasetColumn} where I2 <: Union{Missing, Integer}, 
+    tss_v::Union{AbstractVector{I2}, Nothing, DatasetColumn} where I2 <: Union{Missing, Integer}, 
     columns::Union{Dict{Int, Any}, Dict{Int, GenVarInfo}}, 
     separator::Union{Char, AbstractVector{Char}},
     only_corresp_chr::Bool = true)::QTLStudy                 ########### only_corresp_chr not used! (always treated as true)
+    
+    if trait_v isa DatasetColumn
+        trait_v = trait_v.val
+    end
+    if chr_v isa DatasetColumn
+        chr_v = chr_v.val
+    end
+    if tss_v isa DatasetColumn
+        tss_v = tss_v.val
+    end
 
     if ((chr_v === nothing || tss_v === nothing) && only_corresp_chr)
         throw(ArgumentError("argument `only_corresp_chr` requires chr_v, tss_v")) 
@@ -287,7 +297,7 @@ end
 """
 Partitionate QTLStudy in n folds. Returns a vector of QTLStudy in which each element contains a subsets of file paths and corresponding traits. 
 
-**arguments :""
+**arguments :**
 
 `x::QTLStudy` : the qtl files and informations (see [`QTLStudy`](@ref)) \\
 `m::Integer` : the number of folds

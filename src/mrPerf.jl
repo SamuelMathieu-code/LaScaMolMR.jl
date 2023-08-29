@@ -115,8 +115,11 @@ Wald ratio for Mendelian Randomization with a single instrumental variable
 **arguments :**
 
 `β_Y` : outcome effect sizes
+
 `se_β_Y` : standard error of outcome effect size
+
 `β_X` : exposure effect size
+
 `α` : α value for confidence intervals (default is 0.05)
 
 """
@@ -141,9 +144,13 @@ Wald ratio for Mendelian Randomization with a single instrumental variable
 **arguments :**
 
 `β_Y` : vector of outcome effect sizes
+
 `se_β_Y` : vector of standard error of outcome effect sizes
+
 `β_X` : vector of exposure effect sizes
+
 `se_β_X` : vector of standard error for exposure effect sizes
+
 `α` : α value for confidence intervals (default is 0.05)
 
 """
@@ -165,9 +172,13 @@ currently waiting for GLM.jl PR#487 to be merged to use analytical weights inste
 **arguments :**
 
 `β_Y` : vector of outcome effect sizes
+
 `se_β_Y` : vector of standard error of outcome effect sizes
+
 `β_X` : vector of exposure effect sizes
+
 `se_β_X` : vector of standard error for exposure effect sizes
+
 `α` : α value for confidence intervals (default is 0.05)
 
 **options :**
@@ -238,9 +249,13 @@ currently waiting for GLM.jl PR#487 to be merged to use analytical weights inste
 **arguments :**
 
 `β_Y` : vector of outcome effect sizes
+
 `se_β_Y` : vector of standard error of outcome effect sizes
+
 `β_X` : vector of exposure effect sizes
+
 `se_β_X` : vector of standard error for exposure effect sizes
+
 `α` : α value for confidence intervals (default is 0.05)
     
 """
@@ -265,7 +280,6 @@ function mr_egger(β_Y::AbstractVector{<: Union{AbstractFloat, Missing}},
     if any(isnan.(stderror(regressor)))
         return mr_output(m)
     end
-
 
     ϵ = residuals(regressor)
     X = sqrt.(w) .* [ones(m) β_X_abs]
@@ -304,9 +318,13 @@ Weighted Median Mendelian Randomization (Bowden et al., 2015)
 **arguments :**
 
 `β_Y` : vector of outcome effect sizes
+
 `se_β_Y` : vector of standard error of outcome effect sizes
+
 `β_X` : vector of exposure effect sizes
+
 `se_β_X` : vector of standard error for exposure effect sizes
+
 `α` : α value for confidence intervals (default is 0.05)
 
 **options :**
