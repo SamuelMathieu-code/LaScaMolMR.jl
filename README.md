@@ -232,29 +232,9 @@ output = NaiveCis(data, genotypes; mr_methods = [mr_ivw, mr_something])
 ```
 
 
-## Further improvements
-
-<span style="color:green">
-<b>implemented </b>
-</span> :
-
-- inputs : modular inputs of GWAS and QTL studies.
-- ld : computation of the ld composite
-- MrPref : implementation of heterogeneity tests and iv-regression methods.
-- mrStudyCis, mrStudyTrans, NaiveCis, NaiveTrans : Implemenation of IV selection in cis- and trans-. Supports both strict and naive aproaches for internal pleiotropy.
-
-<span style="color:purple">
-<b>enventualities </b>
-</span> :
-
-- ReverseMR : Reverse causality investigation
-- PlotsMR : Graphical illustration of the results of an MR study
-- add option to remove missense exonic variants (prots with aptamers)
-
 ## TODO
 
-- Meilleure itération et indexing sur QTLStudy object -> conforme à un futur reverse MR
-- Remettre de l'ordre dans les using statements -> insode module LaScaMolMR à LaScaMolMR.jl
-- Constructeurs de struct définis à l'inérieur du struct ? -> s'inspirer d'autres packages pour la forme de façon à suivre les conventions établies.
-- Changer le loading des SnpData vers Naive? -> évite au user de 'en occuper avec les approches test et test-strict.
-- ...? Autres changements à venir en vue d'un premier Release?
+- Transformer strict en Milop -> double seuil.
+- Simplifier et renommer NaiveCis et NaiveTrans ->  une seule fonction
+- implémenter mvmr (seule)
+

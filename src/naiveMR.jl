@@ -197,6 +197,8 @@ function NaiveTrans(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{
                   min_maf::Real = 0
                   )::Dataset
 
+    #### Difference from NaiveCis : in NaiveTrans, potential ivs are separated by chromosome before clumping.
+
     # Gestion of bedbimfam file sets
     if !one_file_per_chr_plink && length(GenotypesArr) != 1
         @warn "More than one bimbedfam set of files but not corresponding to chromosomes : expected only 1, only first will be considered"

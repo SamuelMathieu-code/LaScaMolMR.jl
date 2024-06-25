@@ -303,7 +303,7 @@ function mrStudyCisNFolds(exposure::QTLStudy,
                            min_maf::Real = 0,
                            infos::Bool = true
                           )::Union{Dataset, GroupBy}
-    if approach != "naive" throw(ArgumentError("aproach should not be strict with mrStudyCisNFolds.")) end
+    if approach != "naive" throw(ArgumentError("aproach should not be MiLoP with mrStudyCisNFolds.")) end
 
     arr_d = Vector{Dataset}([])
     for qtl in nfolds(exposure, n_folds)
@@ -311,7 +311,8 @@ function mrStudyCisNFolds(exposure::QTLStudy,
                                 outcome, 
                                 bedbimfam_dirnames,
                                 approach = approach, 
-                                p_tresh = p_tresh, 
+                                p_tresh = p_tresh,
+                                p_tresh_MiLoP = p_tresh, 
                                 window = window, 
                                 r2_tresh = r2_tresh,
                                 exposure_filtered = exposure_filtered,
@@ -342,7 +343,7 @@ Perform a Cis-Mendelian Randomization study with exposure QTL and outcome GWAS
 
 **options :**\\
 
-`approach::String`: name of MR study aproach chosen (either naive, test or strict) (default is "naive")\\
+`approach::String`: name of MR study aproach chosen (either naive, test or MiLoP) (default is "naive")\\
 `p_tresh::Float64`: pvalue threshold for a SNP to be considered associated to an exposure (default is 1e-3)\\
 `window::Integer`: maximal distance between a potential Instrument Variable and transciption start site of gene exposure (default is 500_000)\\
 `r2_tresh::Float64`: maximial corrlation between to SNPs (default is 0.1)\\
@@ -373,7 +374,8 @@ function mrStudyCis(exposure::QTLStudy,
     outcome::GWAS, 
     bedbimfam_dirnames::AbstractArray{<:AbstractString};
     approach::String="naive", 
-    p_tresh::Float64 = 1e-3, 
+    p_tresh::Float64 = 1e-3,
+    p_tresh_MiLoP::Float64 = p_tresh,
     window::Integer = 500000, 
     r2_tresh::Float64 = 0.1,
     exposure_filtered::Bool = false,
@@ -391,7 +393,7 @@ function mrStudyCis(exposure::QTLStudy,
 
     # input validity verification
     l_unique_traits = length(unique(exposure.traits_for_each_path))
-    if approach ∉ ["strict", "naive", "test", "test-strict"] throw(ArgumentError("approach must be either : strict, naive, test or test-strict")) end
+    if approach ∉ ["MiLoP", "naive", "test", "test-MiLoP"] throw(ArgumentError("approach must be either : \"MiLoP\", \"naive\", \"test\" or \"test-MiLoP\"")) end
     if (approach != "naive" || length(exposure.path_v) < 10) && low_ram 
         @warn "low_ram option in mrStudyCis with approach different from \"naive\" or less than 10 files in QTLStudy will not be considered. 
         Pay attention to Memory state." 
@@ -424,7 +426,7 @@ function mrStudyCis(exposure::QTLStudy,
 
     verify_columns(exposure)
     types, header = make_types_and_headers(exposure; pval_bigfloat = pval_bigfloat)
-    qtl_d = read_qtl_files_cis(exposure, types, header, window, p_tresh, exposure_filtered, trsf_pval_exp)
+    qtl_d = read_qtl_files_cis(exposure, types, header, window, p_tresh_MiLoP, exposure_filtered, trsf_pval_exp)
 
     if write_filtered_exposure !== nothing
         filewriter(write_filtered_exposure, qtl_d, delimiter = '\t')
@@ -463,8 +465,8 @@ function mrStudyCis(exposure::QTLStudy,
         filter(:, by = !ismissing)
     end
 
-    # if strict remove all redundant snps (associated to more than one exposure)
-    if approach == "strict" || approach == "test-strict"
+    # if MiLoP remove all redundant snps (associated to more than one exposure)
+    if approach == "MiLoP" || approach == "test-MiLoP"
         joined_d.chr_pos = collect(zip(joined_d.chr, joined_d.pos))
         local counts = countmap(joined_d.chr_pos)
         is_unique_iv(s) = counts[s] == 1
@@ -492,7 +494,7 @@ function mrStudyCis(exposure::QTLStudy,
         @info "Performing clumping and MR..."
     end
     #### for d in eachgroup(joined_d) -> Plink + MR (implemented in NaiveCis)
-    if approach == "naive" || approach == "strict"
+    if approach == "naive" || approach == "MiLoP"
         return NaiveCis(joined_d, GenotypesArr, r2_tresh = r2_tresh, 
                         one_file_per_chr_plink = one_file_per_chr_plink, 
                         mr_methods = mr_methods, α = α, 
@@ -533,7 +535,7 @@ function mrStudyTransNFolds(exposure::QTLStudy,
                            bedbimfam_dirnames::AbstractArray{<:AbstractString};
                            n_folds = 10,
                            approach::String="naive", 
-                           p_tresh::Float64 = 1e-3, 
+                           p_tresh::Float64 = 1e-3,
                            r2_tresh::Float64 = 0.1,
                            exposure_filtered = false,
                            mr_methods::AbstractVector{Function} = [mr_egger, mr_ivw],
@@ -547,7 +549,7 @@ function mrStudyTransNFolds(exposure::QTLStudy,
                            min_maf::Real = 0,
                            infos::Bool = true
                           )::Union{Dataset, GroupBy}
-    if approach != "naive" throw(ArgumentError("aproach should not be strict with mrStudyCisNFolds.")) end
+    if approach != "naive" throw(ArgumentError("aproach should not be MiLoP with mrStudyCisNFolds.")) end
 
     arr_d = Vector{Dataset}([])
     for qtl in nfolds(exposure, n_folds)
@@ -555,7 +557,8 @@ function mrStudyTransNFolds(exposure::QTLStudy,
                                 outcome, 
                                 bedbimfam_dirnames,
                                 approach = approach, 
-                                p_tresh = p_tresh,  
+                                p_tresh = p_tresh,
+                                p_tresh_MiLoP = p_tresh,  
                                 r2_tresh = r2_tresh,
                                 exposure_filtered = exposure_filtered,
                                 mr_methods = mr_methods,
@@ -579,7 +582,7 @@ function mrStudyTransNFolds(exposure::GWAS,
                             bedbimfam_dirnames::AbstractArray{<:AbstractString};
                             n_folds = 10,
                             approach::String="naive", 
-                            p_tresh::Float64 = 1e-3, 
+                            p_tresh::Float64 = 1e-3,
                             r2_tresh::Float64 = 0.1,
                             mr_methods::AbstractVector{Function} = [mr_egger, mr_ivw],
                             α::Float64 = 0.05,
@@ -592,7 +595,7 @@ function mrStudyTransNFolds(exposure::GWAS,
                             infos::Bool = true
                         )::Union{Dataset, GroupBy}
     
-    if approach != "naive" throw(ArgumentError("aproach should not be strict with mrStudyCisNFolds.")) end
+    if approach != "naive" throw(ArgumentError("aproach should not be MiLoP with mrStudyCisNFolds.")) end
 
     arr_d = Vector{Dataset}([])
     for qtl in nfolds(outcome, n_folds)
@@ -629,7 +632,7 @@ Perform a Trans-Mendelian Randomization study with exposure QTL and outcome GWAS
 
 **options :** \\
 
-`approach::String`: name of MR study aproach chosen (either naive, test or strict) (default is "naive")\\
+`approach::String`: name of MR study aproach chosen (either naive, test or MiLoP) (default is "naive")\\
 `p_tresh::Float64`: pvalue threshold for a SNP to be considered associated to an exposure (default is 1e-3)\\
 `r2_tresh::Float64`: maximial corrlation between to SNPs (default is 0.1)\\
 `exposure_filtered::Bool` : If true, the exposure files are considered already filtered will not filtered 
@@ -660,6 +663,7 @@ function mrStudyTrans(exposure::QTLStudy,
     bedbimfam_dirnames::AbstractArray{<:AbstractString};
     approach::String="naive", 
     p_tresh::Float64 = 1e-3, 
+    p_tresh_MiLoP::Float64 = p_tresh, 
     r2_tresh::Float64 = 0.1,
     exposure_filtered::Bool = false,
     mr_methods::AbstractVector{Function} = [mr_egger, mr_ivw],
@@ -677,7 +681,7 @@ function mrStudyTrans(exposure::QTLStudy,
 
     # input validity verification
     l_unique_traits = length(unique(exposure.traits_for_each_path))
-    if approach ∉ ["strict", "naive", "test", "test-strict"] throw(ArgumentError("approach must be either : strict, naive, test, test-strict")) end
+    if approach ∉ ["MiLoP", "naive", "test", "test-MiLoP"] throw(ArgumentError("approach must be either : MiLoP, naive, test, test-MiLoP")) end
     if (approach != "naive" || length(exposure.path_v) < 10) && low_ram 
         @warn "low_ram option in mrStudyCis with approach different from \"naive\" or less than 10 files in QTLStudy will not be considered. Pay attention to Memory state." 
     end
@@ -702,26 +706,33 @@ function mrStudyTrans(exposure::QTLStudy,
                                  min_maf = min_maf,
                                  infos = infos)
     end 
-    #load and filter qtl data (filter for significan snps to exposure and within specified window)
+    #### load and filter qtl data (filter for significan snps to exposure)
     if infos
         @info "reading and filtering exposure..."
     end
 
+    # Verify input format and generate types and names for each column of the exposure dataset
     verify_columns(exposure)
     types, header = make_types_and_headers(exposure; pval_bigfloat = pval_bigfloat)
-    qtl_d = read_qtl_files_trans(exposure, types, header, p_tresh, exposure_filtered, trsf_pval_exp)
+    
+    # Read exposure according to structure defined by `types` and `header`.
+    qtl_d = read_qtl_files_trans(exposure, types, header, p_tresh_MiLoP, exposure_filtered, trsf_pval_exp)
 
+    # If the user specified to write a filtered version of the exposure to speedup future analysis
     if write_filtered_exposure !== nothing
         filewriter(write_filtered_exposure, qtl_d, delimiter = '\t')
     end
     
-    # load gwas data
+    ### Load outcome data
     if infos
         @info "reading outcome..."
     end
 
+    # verify input format and generate tyes and names for each column of the exposure dataset
     verify_columns(outcome)
     types, header = make_types_and_headers(outcome)
+
+    # Read the outcome data according to `header` and `types`
     gwas_d = filereader(outcome.path, 
                         delimiter = outcome.separator, 
                         header = header, types = types, skipto=2, 
@@ -751,12 +762,13 @@ function mrStudyTrans(exposure::QTLStudy,
         filter(:, by = !ismissing)
     end
 
-    # if strict remove all redundant snps (associated to more than one exposure)
-    if approach == "strict" || approach == "test-strict"
+    # if MiLoP remove all redundant snps (associated to more than one exposure)
+    if approach == "MiLoP" || approach == "test-MiLoP"
         joined_d.chr_pos = collect(zip(joined_d.chr, joined_d.pos))
         local counts = countmap(joined_d.chr_pos)
         is_unique_iv(s) = counts[s] == 1
         filter!(joined_d, :chr_pos, by = is_unique_iv)
+        filter!(joined_d, :pval_exp, by = <(p_tresh))
     end
 
     if filter_beta_ratio > 0
@@ -787,8 +799,7 @@ function mrStudyTrans(exposure::QTLStudy,
         @info "performing clumping and MR..."
     end
 
-    #### for d in eachgroup(joined_d) -> Plink + MR (implemented in NaiveCis)
-    if approach == "naive" || approach == "strict"
+    if approach == "naive" || approach == "MiLoP"
         return NaiveTrans(joined_d, GenotypesArr, 
                           r2_tresh = r2_tresh, 
                           one_file_per_chr_plink = one_file_per_chr_plink, 
@@ -814,7 +825,7 @@ Perform a Trans-Mendelian Randomization study with exposure GWAS and outcome GWA
 
 **options :** \\
 
-`approach::String`: name of MR study aproach chosen (either naive, test or strict) (default is "naive")\\
+`approach::String`: name of MR study aproach chosen (either naive, test or MiLoP) (default is "naive")\\
 `p_tresh::Float64`: pvalue threshold for a SNP to be considered associated to an exposure (default is 1e-3)\\
 `r2_tresh::Float64`: maximial corrlation between to SNPs (default is 0.1)\\
 `exposure_filtered::Bool` : If true, the exposure files are considered already filtered will not filtered 
@@ -867,6 +878,7 @@ qtl_exposure = QTLStudy(exposure.path, [exposure_name], [exposure_name], nothing
 return mrStudyTrans(qtl_exposure, outcome, bedbimfam_dirnames;
                     approach = approach,
                     p_tresh = p_tresh,
+                    p_tresh_MiLoP = p_tresh,
                     r2_tresh = r2_tresh,
                     exposure_filtered = exposure_filtered.
                     mr_methods = mr_methods,
@@ -896,7 +908,7 @@ Perform a Trans-Mendelian Randomization study with exposure GWAS and outcome QTL
 
 **options :** 
 
-`approach::String`: name of MR study aproach chosen (either naive, test or strict) (default is "naive")\\
+`approach::String`: name of MR study aproach chosen (either naive, test or MiLoP) (default is "naive")\\
 `p_tresh::Float64`: pvalue threshold for a SNP to be considered associated to an exposure (default is 1e-3)\\
 `r2_tresh::Float64`: maximial corrlation between to SNPs (default is 0.1)\\
 `mr_methods::AbstractVector{Function}` : Functions to use to estimate effect of exposure on outcome.

@@ -74,9 +74,9 @@ plink_files = ["folder/basename_file_chr$(i)" for i in 1:22]
 # Perform MR for every exposure - outcme pairs with default parameters
 out_table = mrStudyCis(exposure, outcome, plink_files)
 
-# with strict approach to internal pleiotropy and other parameters :
+# with MiLoP approach to internal pleiotropy and other parameters :
 out_table2 = mrStudyCis(exposure, outcome, plink_files, 
-                        approach = "strict", 
+                        approach = "MiLoP", 
                         r2_tresh = 0.01, 
                         p_tresh = 5e-8, 
                         pval_bigfolat = true)
@@ -84,7 +84,7 @@ out_table2 = mrStudyCis(exposure, outcome, plink_files,
 # rendered outputs and the MR methods used (see documentation for detailed information)
 
 # You can also separate te IV filtration part of the Study from the clumping+MR part 
-# by using the test and test-strict approaches :
+# by using the test and test-MiLoP approaches :
 
 potential_ivs = out_table = mrStudyCis(exposure, outcome, plink_files, approach = "test")
 
@@ -162,9 +162,9 @@ plink_files = ["folder/basename_file_chr$(i)" for i in 1:22]
 # Perform MR for every exposure - outcme pairs with default parameters
 out_table = mrStudyTrans(exposure, outcome, plink_files)
 
-# with strict approach to internal pleiotropy and other parameters :
+# with MiLoP approach to internal pleiotropy and other parameters :
 out_table2 = mrStudyTrans(exposure, outcome, plink_files, 
-                        approach = "strict", 
+                        approach = "MiLoP", 
                         r2_tresh = 0.01, 
                         p_tresh = 5e-8, 
                         filter_beta_ratio = 1)
