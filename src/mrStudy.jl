@@ -495,7 +495,7 @@ function mrStudyCis(exposure::QTLStudy,
     end
     #### for d in eachgroup(joined_d) -> Plink + MR (implemented in NaiveCis)
     if approach == "naive" || approach == "MiLoP"
-        return NaiveCis(joined_d, GenotypesArr, r2_tresh = r2_tresh, 
+        return NaiveTrans(joined_d, GenotypesArr, r2_tresh = r2_tresh, 
                         one_file_per_chr_plink = one_file_per_chr_plink, 
                         mr_methods = mr_methods, α = α, 
                         write_ivs = write_ivs, min_maf = min_maf)
