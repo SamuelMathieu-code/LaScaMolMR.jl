@@ -1,11 +1,11 @@
 <div align="center">
 
-# LaScaMol MR
-
 <kbd>
   <img src="docs/src/assets/logo.png" 
-       width=400 />
+       width=300 />
 </kbd>
+
+# LaScaMol MR
 
 [![Build Status](https://github.com/SamuelMathieu-code/MrPainter.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/SamuelMathieu-code/MrPainter.jl/actions/workflows/CI.yml?query=branch%3Amain)
 
