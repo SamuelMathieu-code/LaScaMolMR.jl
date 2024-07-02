@@ -673,7 +673,7 @@ end
 
 
 """
-Perform a Trans-Mendelian Randomization study with exposure GWAS and outcome QTL (Reverse MR)
+Perform a Trans-Mendelian Randomization study with exposure GWAS and outcome QTL
 
 **arguments :**
 
