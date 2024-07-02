@@ -1,8 +1,8 @@
-# LaScaMolMR.jl
+# LaScaMolMR
 
 ## Overview 
 
-LaScaMolMR.jl (Large Scale Molecular Mendelian Randomization) is a threaded Mendelian Randomization (MR) package that is focused on the generation of transcriptome wide / molecular MR analysies. Although it provides interface for most common MR regression estimators (Inverse Variance Weighted, Weighted Median, Egger, Wald), its intended use is to enable fast Omic-wide Mendelian Randomization studies. The rise of large genetic cohort data has benefited the statistical power of Genome Wide Association Studies (GWAS) and Quantitative Trait Loci (QTL). Thus enabling findings in extensive studies such as Transcriptome Wide MR (TWMR). LaScaMolMR.jl provides a fast and efficient framework to such analyses, allowing users to test different parameters.
+LaScaMolMR.jl (Large Scale Molecular Mendelian Randomization) is a threaded Mendelian Randomization (MR) package that is focused on the generation of transcriptome wide / molecular MR analysies. Although it provides an interface for most common MR regression estimators (Inverse Variance Weighted, Weighted Median, Egger, Wald), its intended use is to enable fast Omic-wide Mendelian Randomization studies. The rise of large genetic cohort data has benefited the statistical power of Genome Wide Association Studies (GWAS) and Quantitative Trait Loci (QTL). Thus enabling findings in extensive studies such as Transcriptome Wide MR (TWMR). LaScaMolMR.jl provides a fast and efficient framework to such analyses, allowing users to customize the parameters of the study.
 
 ## Tutorial
 
@@ -194,7 +194,7 @@ struct mr_output
 end
 ```
 
-Any function following this format could be provided to [`ClumpAndMR`](@ref)/[`mrStudy`](@ref) inside `mr_methods`,
+Any function following this format could be provided to [`ClumpAndMR`](@ref)/[`mrStudy`](@ref) in the `mr_methods` option,
 including user-defined functions.
 
 ```julia
@@ -223,9 +223,9 @@ output = NaiveCis(data, genotypes; mr_methods = [mr_ivw, mr_something])
 
 ### Provide inputs
 
-These functions allows users to specify the inputs formats. The QTL summary statistics can be united in a single file or divided by exposure, chromosome or both.
+These functions allow users to specify the input formats. The QTL summary statistics can be united in a single file or divided by exposure, chromosome or both.
 
-For the sake of simplicity, we consider a genetic association study as a GWAS when a single phenotype was studied and a QTLSudy otherwise.
+For the sake of simplicity, we consider a genetic association study as a GWAS when a single phenotype was studied and as a QTLStudy otherwise.
 
 ```@docs
 GenVarInfo
