@@ -5,7 +5,7 @@
        width=300 />
 </kbd>
 
-# LaScaMol MR
+# LaScaMolMR.jl
 
 [![Build Status](https://github.com/SamuelMathieu-code/MrPainter.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/SamuelMathieu-code/MrPainter.jl/actions/workflows/CI.yml?query=branch%3Amain)
 
@@ -76,10 +76,10 @@ outcome = GWAS("/some/file", columns, separator = ',', trait_name = "Some Painfu
 plink_files = ["folder/basename_file_chr$(i)" for i in 1:22]
 
 # Perform MR for every exposure - outcme pairs with default parameters
-out_table = mrStudyTrans(exposure, outcome, plink_files)
+out_table = mrStudy(exposure, outcome, plink_files)
 
 # with MiLoP approach and other parameters :
-out_table2 = mrStudyTrans(exposure, outcome, plink_files, 
+out_table2 = mrStudy(exposure, outcome, plink_files, 
                         approach = "MiLoP", 
                         r2_tresh = 0.01, 
                         p_tresh = 5e-8,
