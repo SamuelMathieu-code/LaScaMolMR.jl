@@ -17,7 +17,6 @@ LaScaMolMR.jl (Large Scale Molecular Mendelian Randomization) is a threaded Mend
 
 ## Example
 
-
 For a QTL dataset composed as follows :
 
 ```
