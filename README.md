@@ -76,10 +76,10 @@ outcome = GWAS("/some/file", columns, separator = ',', trait_name = "Some Painfu
 plink_files = ["folder/basename_file_chr$(i)" for i in 1:22]
 
 # Perform MR for every exposure - outcme pairs with default parameters
-out_table = mrStudy(exposure, outcome, plink_files)
+out_table = mrStudy(exposure, outcome, "cis", plink_files)
 
 # with MiLoP approach and other parameters :
-out_table2 = mrStudy(exposure, outcome, plink_files, 
+out_table2 = mrStudy(exposure, outcome, "cis", plink_files, 
                         approach = "MiLoP", 
                         r2_tresh = 0.01, 
                         p_tresh = 5e-8,
@@ -92,7 +92,7 @@ out_table2 = mrStudy(exposure, outcome, plink_files,
 Mitigated Local Pleiotropy (MiLoP) approach modifies the potential IV selection process to remove instrument variables associated to more than 1 exposure at `p_tresh_MiLoP` significance level.
 
 
-## Enhancement ideas
+## Planned Enhancements
 
 - Multivariate MR & TWMR according to [Porcu et al.](https://pubmed.ncbi.nlm.nih.gov/31341166/)
 - Mediation analysis inspired by [Auwerx et al.](https://elifesciences.org/articles/81097)

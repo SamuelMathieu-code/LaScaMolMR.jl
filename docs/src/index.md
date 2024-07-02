@@ -73,10 +73,10 @@ outcome = GWAS("/some/file", columns, separator = ',', trait_name = "Some Painfu
 plink_files = ["folder/basename_file_chr$(i)" for i in 1:22]
 
 # Perform MR for every exposure - outcome pairs with default parameters
-out_table = mrStudyCis(exposure, outcome, plink_files)
+out_table = mrStudy(exposure, outcome, "cis", plink_files)
 
 # with MiLoP approach to internal pleiotropy and other parameters :
-out_table_MiLoP = mrStudyCis(exposure, outcome, plink_files, 
+out_table_MiLoP = mrStudy(exposure, outcome, "cis", plink_files, 
                         approach = "MiLoP", 
                         r2_tresh = 0.01, 
                         p_tresh = 5e-8,
@@ -145,10 +145,10 @@ outcome = GWAS("/some/file", columns, separator = ',', trait_name = "Some Painfu
 plink_files = ["folder/basename_file_chr$(i)" for i in 1:22]
 
 # Perform MR for every exposure - outcme pairs with default parameters
-out_table = mrStudyTrans(exposure, outcome, plink_files)
+out_table = mrStudy(exposure, outcome, "trans", plink_files)
 
 # with MiLoP approach and other parameters :
-out_table2 = mrStudyTrans(exposure, outcome, plink_files, 
+out_table2 = mrStudy(exposure, outcome, "trans", plink_files, 
                         approach = "MiLoP", 
                         r2_tresh = 0.01, 
                         p_tresh = 5e-8,
@@ -214,12 +214,12 @@ end
 output = NaiveCis(data, genotypes; mr_methods = [mr_ivw, mr_something])
 ```
 
-## Contents
-
-```@contents
-```
-
 ## API
+
+### Index
+
+```@index
+```
 
 ### Provide inputs
 
@@ -284,7 +284,11 @@ formatSnpData!
 clump
 ```
 
-## Index
+## Contents
 
-```@index
+```@contents
 ```
+
+### Authors 
+
+**Samuel Mathieu**, Hippolyte Minvielle Moncla, Mewen Briend, Valentine Duclos, Anne Rufiange, Patrick Mathieu
