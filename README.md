@@ -11,7 +11,7 @@
 [![][docs-latest-img]][docs-latest-url]
 
 [docs-latest-img]: https://img.shields.io/badge/docs-latest-blue.svg
-[docs-latest-url]: https://github.com/SamuelMathieu-code/LaScaMolMR.jl
+[docs-latest-url]: https://github.io/SamuelMathieu-code/LaScaMolMR.jl
 
 </div>
 
