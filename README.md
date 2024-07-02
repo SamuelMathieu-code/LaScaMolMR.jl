@@ -2,6 +2,11 @@
 
 # LaScaMol MR
 
+<kbd>
+  <img src="docs/src/assets/logo.png" 
+       width=400 />
+</kbd>
+
 [![Build Status](https://github.com/SamuelMathieu-code/MrPainter.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/SamuelMathieu-code/MrPainter.jl/actions/workflows/CI.yml?query=branch%3Amain)
 
 </div>
