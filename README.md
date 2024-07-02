@@ -1,9 +1,9 @@
 <div align="center">
 
-<kbd>
-  <img src="docs/src/assets/logo.png" 
-       width=300 />
-</kbd>
+
+<image src="docs/src/assets/logo.png" 
+    width=300 />
+
 
 # LaScaMolMR.jl
 
