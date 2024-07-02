@@ -8,6 +8,10 @@
 # LaScaMolMR.jl
 
 [![Build Status](https://github.com/SamuelMathieu-code/MrPainter.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/SamuelMathieu-code/MrPainter.jl/actions/workflows/CI.yml?query=branch%3Amain)
+[![][docs-latest-img]][docs-latest-url]
+
+[docs-latest-img]: https://img.shields.io/badge/docs-latest-blue.svg
+[docs-latest-url]: https://github.com/SamuelMathieu-code/LaScaMolMR.jl
 
 </div>
 
