@@ -99,5 +99,6 @@ Mitigated Local Pleiotropy (MiLoP) approach modifies the potential IV selection 
 ## Planned Enhancements
 
 - Multivariate MR & TWMR according to [Porcu et al.](https://pubmed.ncbi.nlm.nih.gov/31341166/)
+- Steiger for causal direction assesment [Hmani et al.](https://journals.plos.org/plosgenetics/article?id=10.1371/journal.pgen.1007081)
 - Mediation analysis inspired by [Auwerx et al.](https://elifesciences.org/articles/81097)
 - Web interface for locus visualization with [Genie.jl](https://genieframework.com)
