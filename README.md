@@ -27,7 +27,8 @@ LaScaMolMR.jl (Large Scale Molecular Mendelian Randomization) is a threaded Mend
 <image src="img/concept_lascamol.png" 
     width=600 />
 </div>
-The figure above shows steps of the pipeline, a function call graph and implemented/used input data types. \\
+The figure above shows steps of the pipeline, a function call graph and implemented/used input data types.
+
 *SnpData is implemented in [SnpArrays](https://github.com/OpenMendel/SnpArrays.jl.git) Package.
 
 ## Example
