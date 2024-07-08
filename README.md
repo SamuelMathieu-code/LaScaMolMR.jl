@@ -24,7 +24,7 @@ LaScaMolMR.jl (Large Scale Molecular Mendelian Randomization) is a threaded Mend
 </div>
 
 <div align="center">
-<image src="img/concept_lascamol.png" 
+<image src="img/Pipeline_LaScaMol_transparent.png" 
     width=600 />
 </div>
 The figure above shows steps of the pipeline, a function call graph and implemented/used input data types.
