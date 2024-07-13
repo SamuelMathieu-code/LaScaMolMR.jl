@@ -163,7 +163,7 @@ If formatSnpData has already been called on good snp info type (`:chr_pos` or `:
 See [`formatSnpData!`](@ref).
 """
 function clump(ref_genotypes::SnpData, 
-               snps::AbstractVector{<:Tuple{Integer, Integer}}; 
+               snps; 
                r2_tresh::AbstractFloat = 0.1,
                formated = false,
                min_maf::Real = 0

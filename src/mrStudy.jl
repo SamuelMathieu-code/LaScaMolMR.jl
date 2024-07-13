@@ -262,6 +262,23 @@ function read_qtl_files_trans(exposure::QTLStudy,
     return data_filtered
 end
 
+# Remove all pleiotropic variants and apply final selection filters
+function apply_MiLoP!(joined_d, exposure, window, p_tresh)
+    joined_d.chr_pos = collect(zip(joined_d.chr, joined_d.pos))
+    counts = countmap(joined_d.chr_pos)
+    is_unique_iv(s) = counts[s] == 1
+    filter!(joined_d, :chr_pos, by=is_unique_iv)
+    filter!(joined_d, :pval_exp, by=(<(p_tresh)))
+
+    ref_dict = Dict(zip(exposure.trait_v, zip(exposure.chr_v, exposure.tss_v)))
+
+    in_window(s::SubArray) = (
+        haskey(ref_dict, s[3]) &&
+        s[1] == ref_dict[s[3]][1] && # good chr
+        abs(s[2] - ref_dict[s[3]][2]) ≤ window # in window
+    )
+    filter!(joined_d, [:chr, :pos, :trait], type = in_window)
+end
 
 #########################
 #     mrStudyNFolds     #
@@ -490,8 +507,10 @@ function mrStudy(exposure::QTLStudy,
     types, header = make_types_and_headers(exposure; pval_bigfloat=pval_bigfloat)
 
     # Read exposure according to structure defined by `types` and `header` in trans or cis.
-    if type == "cis"
+    if type == "cis" && approach ∈ ["naive", "test"]
         qtl_d = read_qtl_files_cis(exposure, types, header, window, p_tresh_MiLoP, exposure_filtered, trsf_pval_exp)
+    elseif type == "cis" # If MiLoP, widen window to catch all pleiotropic effeccts
+        qtl_d = read_qtl_files_cis(exposure, types, header, 250_000_000, p_tresh_MiLoP, exposure_filtered, trsf_pval_exp)
     else
         qtl_d = read_qtl_files_trans(exposure, types, header, p_tresh_MiLoP, exposure_filtered, trsf_pval_exp)
     end
@@ -540,12 +559,9 @@ function mrStudy(exposure::QTLStudy,
     end
 
     # if MiLoP remove all redundant snps (associated to more than one exposure)
+    # Than apply final filters
     if approach == "MiLoP" || approach == "test-MiLoP"
-        joined_d.chr_pos = collect(zip(joined_d.chr, joined_d.pos))
-        local counts = countmap(joined_d.chr_pos)
-        is_unique_iv(s) = counts[s] == 1
-        filter!(joined_d, :chr_pos, by=is_unique_iv)
-        filter!(joined_d, :pval_exp, by=(<(p_tresh)))
+        apply_MiLoP!(joined_d, exposure, window, p_tresh)
     end
 
     # filter out variants for which the association to the outcome is has larger effect than association to the exposure if option enabled

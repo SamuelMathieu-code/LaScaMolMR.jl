@@ -89,40 +89,29 @@ function ClumpAndMR(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{
     exposureNamesV = Vector{String}(undef, length(eachgroup(data)))
 
     # MR pipeline for each exposure
-    for (i, data_group) in enumerate(eachgroup(data))
+    @inbounds for (i, data_group) in enumerate(eachgroup(data))
         
-        # prioritize ivs by lowest pvalue
-        ivs_d = sort(data_group, :pval_exp, view = true)
+        ivs_d = sort(data_group, :pval_exp) #prioritize snps by pval
+        ivs_d[!, :kept] .= true
+        groupby!(ivs_d, :chr, stable = true)
 
-        ### separate into chrs and clump in diff chrs.
-        d_each_chr = Dict{Int8, Vector{Int64}}([i => Vector{Int64}([]) for i in 1:22])
-        for i in axes(ivs_d, 1)
-            push!(d_each_chr[ivs_d[i, :chr]], i)
-        end
-
-        all_kept_indx = Vector{Int64}([])
-        for i in 1:22
-
-            # if one plink fileset per chromosome, take file correponfing to exposure chromosome
+        for ivs_in_chr in eachgroup(ivs_d) #clump different chromosomes separately
+            
             if one_file_per_chr_plink
-                g = GenotypesArr[i]
+                g = GenotypesArr[ivs_in_chr.chr[1]]
             else # else take first
                 g = GenotypesArr[1]
             end
 
-            # clump for only independant ivs
-            ivs_in_chr_idx = d_each_chr[i]
-            kept_v_b = clump(g, 
-                             Vector{Tuple{Int8, Int32}}(collect(zip(ivs_d[ivs_in_chr_idx, :chr], ivs_d[ivs_in_chr_idx, :pos]))), 
-                             r2_tresh = r2_tresh, 
-                             formated = true,
-                             min_maf = min_maf)
-
-            append!(all_kept_indx, ivs_in_chr_idx[kept_v_b])
-
+            ivs_in_chr.kept .= clump(g, 
+                                 collect(zip(ivs_d.chr.val, ivs_d.pos.val)), 
+                                 r2_tresh = r2_tresh, 
+                                 formated = true,
+                                 min_maf = min_maf)
         end
 
-        ivs_d = ivs_d[all_kept_indx, :]
+        filter!(ivs_d, :kept)
+        select!(ivs_d, Not(:kept))
 
         # harmonisation of effect sizes
         @threads for row in axes(ivs_d, 1)
