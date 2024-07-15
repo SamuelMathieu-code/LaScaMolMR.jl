@@ -194,7 +194,7 @@ struct mr_output
 end
 ```
 
-Any function following this format could be provided to [`ClumpAndMR`](@ref)/[`mrStudy`](@ref) in the `mr_methods` option,
+Any function following this format could be provided to [`clumpAndMR`](@ref)/[`mrStudy`](@ref) in the `mr_methods` option,
 including user-defined functions.
 
 ```julia
@@ -249,10 +249,10 @@ mrStudyNFolds
 
 ### Linkage Desiquilibrium and MR
 
-The `ClumpAndMR` function performs clumping over every pair of (exposure, outcome) and calls Mendelian randomization fonctions. You can thus use it if potential IV selection was already performed.
+The `clumpAndMR` function performs clumping over every pair of (exposure, outcome) and calls Mendelian randomization fonctions. You can thus use it if potential IV selection was already performed.
 
 ```@docs
-ClumpAndMR
+clumpAndMR
 ```
 
 ### Mendelian Randomization functions
