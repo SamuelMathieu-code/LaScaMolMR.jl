@@ -44,10 +44,10 @@ Keep independant IVs and perform MR in Omic-wide MR (Trans or Cis)
 ## Examples :
 
 ```julia
-res_d = ClumpAndMR(d, GenotypesArr, r2_tresh = 0.1)
+res_d = clumpAndMR(d, GenotypesArr, r2_tresh = 0.1)
 ```
 """
-function ClumpAndMR(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{SnpData}; 
+function clumpAndMR(data::Union{Dataset, GroupBy}, GenotypesArr::AbstractVector{SnpData}; 
                   one_file_per_chr_plink::Bool = true,
                   r2_tresh::AbstractFloat = 0.1,
                   mr_methods::AbstractVector{Function} = [mr_egger, mr_ivw],

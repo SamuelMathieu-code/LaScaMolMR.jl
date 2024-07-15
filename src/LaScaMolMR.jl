@@ -5,7 +5,7 @@ export GenVarInfo, GWAS, QTLStudy, QTLStudy_from_pattern, nfolds
 export mr_output, mr_egger, mr_ivw, mr_wald, mr_wm
 export clump, formatSnpData!
 export mrStudy, mrStudyNFolds
-export ClumpAndMR
+export clumpAndMR
 # ... others to come
 
 include("ld.jl")

@@ -184,6 +184,7 @@ function read_filter_file(file::GWAS,
         d.trait = repeat([file.trait_name], nrow(d))
     end
 
+    # Make alleles lowercase. Store alleles and trait names as PooledArrays
     modify!(d, :trait => PooledArray, [a_effect, a_other] .=> (PooledArray ∘ (x -> lowercase.(x))))
 
     if trsf_log_pval !== nothing
@@ -263,21 +264,23 @@ function read_qtl_files_trans(exposure::QTLStudy,
 end
 
 # Remove all pleiotropic variants and apply final selection filters
-function apply_MiLoP!(joined_d, exposure, window, p_tresh)
-    joined_d.chr_pos = collect(zip(joined_d.chr, joined_d.pos))
-    counts = countmap(joined_d.chr_pos)
+function apply_MiLoP!(qtl_d, exposure, window, p_tresh, type)
+    qtl_d.chr_pos = collect(zip(qtl_d.chr, qtl_d.pos))
+    counts = countmap(qtl_d.chr_pos)
     is_unique_iv(s) = counts[s] == 1
-    filter!(joined_d, :chr_pos, by=is_unique_iv)
-    filter!(joined_d, :pval_exp, by=(<(p_tresh)))
+    filter!(qtl_d, :chr_pos, by=is_unique_iv)
+    filter!(qtl_d, :pval_exp, by=(<(p_tresh)))
 
-    ref_dict = Dict(zip(exposure.trait_v, zip(exposure.chr_v, exposure.tss_v)))
+    if type == "cis"
+        ref_dict = Dict(zip(exposure.trait_v, zip(exposure.chr_v, exposure.tss_v)))
 
-    in_window(s::SubArray) = (
-        haskey(ref_dict, s[3]) &&
-        s[1] == ref_dict[s[3]][1] && # good chr
-        abs(s[2] - ref_dict[s[3]][2]) ≤ window # in window
-    )
-    filter!(joined_d, [:chr, :pos, :trait], type = in_window)
+        in_window(s::SubArray) = (
+            haskey(ref_dict, s[3]) &&
+            s[1] == ref_dict[s[3]][1] && # good chr
+            abs(s[2] - ref_dict[s[3]][2]) ≤ window # in window
+        )
+        filter!(qtl_d, [:chr, :pos, :trait], type = in_window)
+    end
 end
 
 #########################
@@ -439,7 +442,7 @@ Perform a Mendelian Randomization study with exposure QTL and outcome GWAS
 
 `approach::String`: name of MR study aproach chosen (either naive, test or MiLoP) (default is "naive")\\
 `p_tresh::Float64`: pvalue threshold for a SNP to be considered associated to an exposure (default is 1e-3)\\
-`window::Integer`: maximal distance between a potential Instrument Variable and transciption start site of gene exposure (default is 500_000)\\
+`window::Integer`: maximal distance between a potential Instrument Variable and transciption start site of gene exposure (default is 500'000)\\
 `r2_tresh::Float64`: maximial corrlation between to SNPs (default is 0.1)\\
 `exposure_filtered::Bool` : If true, the exposure files are considered already filtered will not filtered 
     on distance to tss and level of significance (default is false)\\
@@ -515,6 +518,12 @@ function mrStudy(exposure::QTLStudy,
         qtl_d = read_qtl_files_trans(exposure, types, header, p_tresh_MiLoP, exposure_filtered, trsf_pval_exp)
     end
 
+    # if MiLoP remove all redundant snps (potentialy associated to more than one exposure)
+    # Than apply final filters
+    if approach == "MiLoP" || approach == "test-MiLoP"
+        apply_MiLoP!(qtl_d, exposure, window, p_tresh, type)
+    end
+
     # If the user specified to write a filtered version of the exposure to speedup future analysis
     if write_filtered_exposure !== nothing
         filewriter(write_filtered_exposure, qtl_d, delimiter='\t')
@@ -541,6 +550,7 @@ function mrStudy(exposure::QTLStudy,
     # change gwas a_effect_out a_other_out to a Pooled array to save memory
     modify!(gwas_d, [:a_effect_out, :a_other_out] => (PooledArray ∘ x -> lowercase.(x)))
 
+    # warn if empty intersect
     if size(gwas_d, 1) == 0 || size(qtl_d, 1) == 0
         @warn "No IVS were found with given parameters."
         return Dataset()
@@ -556,12 +566,6 @@ function mrStudy(exposure::QTLStudy,
         # keep only biallelic snps
         filter([:a_effect_exp, :a_effect_out, :a_other_exp, :a_other_out], type=biallelic, missings=false) # filter for "obvious" non biallelic variants
         filter(:, by=!ismissing)
-    end
-
-    # if MiLoP remove all redundant snps (associated to more than one exposure)
-    # Than apply final filters
-    if approach == "MiLoP" || approach == "test-MiLoP"
-        apply_MiLoP!(joined_d, exposure, window, p_tresh)
     end
 
     # filter out variants for which the association to the outcome is has larger effect than association to the exposure if option enabled
@@ -594,7 +598,7 @@ function mrStudy(exposure::QTLStudy,
 
     # For each exposure, select independant IVs and perform MR analysis 
     if approach == "naive" || approach == "MiLoP"
-        return ClumpAndMR(joined_d, GenotypesArr, r2_tresh=r2_tresh,
+        return clumpAndMR(joined_d, GenotypesArr, r2_tresh=r2_tresh,
             one_file_per_chr_plink=one_file_per_chr_plink,
             mr_methods=mr_methods, α=α,
             write_ivs=write_ivs, min_maf=min_maf)
@@ -609,14 +613,14 @@ Perform a Trans-Mendelian Randomization study with exposure GWAS and outcome GWA
 
 **arguments :**
 
-`exposure::GWAS` : exposure QTL data \\
+`exposure::GWAS` : exposure GWAS data \\
 `outcome::GWAS` : outcome GWAS data \\
 `bedbimfam_dirnames::AbstractArray{<:AbstractString}` : base names of Plink bedbimfam files for reference genotypes 
     (see [SnpArrays documentation](https://openmendel.github.io/SnpArrays.jl/latest/))\\
 
 **options :** \\
 
-`approach::String`: name of MR study aproach chosen (either naive, test or MiLoP) (default is "naive")\\
+`approach::String`: name of MR study aproach chosen (either naive, test) (default is "naive")\\
 `p_tresh::Float64`: pvalue threshold for a SNP to be considered associated to an exposure (default is 1e-3)\\
 `r2_tresh::Float64`: maximial corrlation between to SNPs (default is 0.1)\\
 `exposure_filtered::Bool` : If true, the exposure files are considered already filtered will not filtered 
@@ -700,7 +704,7 @@ Perform a Trans-Mendelian Randomization study with exposure GWAS and outcome QTL
 
 **options :** 
 
-`approach::String`: name of MR study aproach chosen (either naive, test or MiLoP) (default is "naive")\\
+`approach::String`: name of MR study aproach chosen (either naive, test) (default is "naive")\\
 `p_tresh::Float64`: pvalue threshold for a SNP to be considered associated to an exposure (default is 1e-3)\\
 `r2_tresh::Float64`: maximial corrlation between to SNPs (default is 0.1)\\
 `mr_methods::AbstractVector{Function}` : Functions to use to estimate effect of exposure on outcome.
@@ -820,7 +824,7 @@ function mrStudy(exposure::GWAS,
     end
     # for each exposure, select independant IVs and perform MR
     if approach == "naive"
-        return ClumpAndMR(joined_d, GenotypesArr,
+        return clumpAndMR(joined_d, GenotypesArr,
             r2_tresh=r2_tresh,
             one_file_per_chr_plink=one_file_per_chr_plink,
             mr_methods=mr_methods,

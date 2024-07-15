@@ -144,15 +144,15 @@ options :
 ```julia
 julia> ref = SnpData(datadir("some/data"));
 
-julia> kept_v_b::Vector{Bool} = clump([(1, 123), (1, 456), (1, 789)], ref)
+julia> kept_v_b::Vector{Bool} = clump(ref [(1, 123), (1, 456), (1, 789)])
 3-element Vector{Int64}:
  1
- 0
+ 1
  1
 
 julia> formatSnpData!(ref);
 
-julia> kept_v_b::Vector{Bool} = clump([(1, 123), (1, 456), (1, 789)], ref, formated = true)
+julia> kept_v_b::Vector{Bool} = clump(ref, [(1, 123), (1, 456), (1, 789)], formated = true, r2_tresh = 0.01)
 3-element Vector{Int64}:
  1
  0
