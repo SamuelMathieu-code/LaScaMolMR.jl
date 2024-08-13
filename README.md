@@ -31,6 +31,15 @@ The figure above shows steps of the pipeline, a function call graph and implemen
 
 *SnpData is implemented in [SnpArrays](https://github.com/OpenMendel/SnpArrays.jl.git) Package.
 
+## Install
+
+```
+julia> ]
+
+(@v1.10) pkg> add "https://github.com/SamuelMathieu-code/LaScaMolMR.jl"
+
+```
+
 ## Example
 
 For a QTL dataset composed as follows :
@@ -108,7 +117,7 @@ out_table2 = mrStudy(exposure, outcome, "cis", plink_files,
 Mitigated Local Pleiotropy (MiLoP) approach modifies the potential IV selection process to remove instrument variables associated to more than 1 exposure at `p_tresh_MiLoP` significance level.
 
 
-## Planned Enhancements
+## Enhancement Ideas
 
 - Multivariate MR & TWMR according to [Porcu et al.](https://pubmed.ncbi.nlm.nih.gov/31341166/)
 - Steiger for causal direction assesment [Hmani et al.](https://journals.plos.org/plosgenetics/article?id=10.1371/journal.pgen.1007081)
