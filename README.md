@@ -42,13 +42,11 @@ julia> ]
 
 ## Example
 
-For a QTL dataset composed as follows :
+For a QTL dataset composed as follows with a single file :
 
 ```
 base/folder
-├── exposureA.txt
-├── exposureB.txt
-└── exposureC.txt
+└── all_explosures.txt
 ```
 
 With example data composed like this (tab separated) :
@@ -75,7 +73,7 @@ using LaScaMolMR
 1. Describe exposure data.
 
 ```julia
-path_pattern = ["exposure", TRAIT_NAME, ".txt"]
+path_pattern = ["all_exposures.txt"]
 columns = Dict(1 => CHR, 2 => POS, 3 => A_EFFECT, 4 => A_OTHER, 5 => BETA, 6 => SE, 8 => PVAL)
 
 trait_v = ["A", "B", "C"] # Chromosome and TSS informations are not relevant in Trans setting.
@@ -87,6 +85,8 @@ exposure::QTLStudy = QTLStudy_from_pattern("base/folder/",
                                             columns, separator = '\t', 
                                             only_corresp_chr = false)
 ```
+
+Of note, the `path_pattern` variable can adapt to other file achitectures, when exposures are dispacted in different files (see the full documentation).
 
 2. Describe outcome data.
 
